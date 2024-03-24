@@ -5,11 +5,11 @@
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, FixedOffset, NaiveDate};
-use std::collections::HashMap;
+use std::{collections::HashMap, net::IpAddr};
 
 #[derive(Debug)]
 pub struct LogItem {
-    pub client: String,
+    pub client: IpAddr,
     pub time: DateTime<FixedOffset>,
     pub url: String,
     pub size: u64,
@@ -147,7 +147,7 @@ impl CombinedParser {
         // tracing::debug!("user_agent: {:?}", user_agent);
 
         Ok(LogItem {
-            client,
+            client: client.parse()?,
             time,
             url,
             size,
@@ -159,6 +159,8 @@ impl CombinedParser {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use test_log::test;
 
@@ -174,7 +176,7 @@ mod tests {
         let parser = CombinedParser::default();
         let log = r#"123.45.67.8 - - [12/Mar/2023:00:15:32 +0800] "GET /path/to/a/file HTTP/1.1" 200 3009 "-" """#;
         let item = parser.parse(log).unwrap();
-        assert_eq!(item.client, "123.45.67.8");
+        assert_eq!(item.client, IpAddr::from_str("123.45.67.8").unwrap());
         assert_eq!(item.url, "/path/to/a/file");
         assert_eq!(item.size, 3009);
         assert_eq!(item.status, 200);
