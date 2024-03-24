@@ -77,6 +77,9 @@ fn stage1(args: &Cli) {
     });
     entries.reverse();
 
+    let now_utc = chrono::Utc::now();
+    let combined_parser = combined::CombinedParser::default();
+
     for entry in entries {
         let filename = entry.file_name();
         let filename = filename.to_str().unwrap();
@@ -105,8 +108,12 @@ fn stage1(args: &Cli) {
 
         for line in bufreader.lines() {
             let line = line.expect("read line failed");
-            let item = combined::combined_parse(&line).expect("parse line failed");
+            let item = combined_parser.parse(&line).expect("parse line failed");
             let url = &item.url;
+            let duration = now_utc.signed_duration_since(item.time);
+            if duration.num_hours() > 24 * 7 {
+                continue;
+            }
             for re in &args.filter {
                 if !re.is_match(url) {
                     continue;
