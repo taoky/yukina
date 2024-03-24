@@ -133,7 +133,10 @@ fn stage1(args: &Cli) {
     let mut stop_iterate_flag = false;
     for entry in entries {
         if stop_iterate_flag {
-            tracing::info!("Would not process {} due to time limit", entry.path().display());
+            tracing::info!(
+                "Would not process {} due to time limit",
+                entry.path().display()
+            );
             break;
         }
         let filename = entry.file_name();
@@ -170,10 +173,15 @@ fn stage1(args: &Cli) {
                 stop_iterate_flag = true;
                 continue;
             }
+            // if filter is not empty, only process the matched url
+            let mut matched = args.filter.is_empty();
             for re in &args.filter {
-                if !re.is_match(url) {
-                    continue;
+                if re.is_match(url) {
+                    matched = true;
                 }
+            }
+            if !matched {
+                continue;
             }
             let client_prefix = get_ip_prefix_string(item.client);
             let ip_prefix_url = IpPrefixUrl {
@@ -193,6 +201,7 @@ fn stage1(args: &Cli) {
             } else if item.status == 302 || item.status == 404 {
                 vote.reject_count += 1;
             } else {
+                tracing::debug!("Unknown status: {}", item.status);
                 vote.unknown_count += 1;
             }
             vote.resp_size = vote.resp_size.max(item.size);
