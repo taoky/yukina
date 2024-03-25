@@ -20,24 +20,31 @@ fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
 
 #[derive(Parser, Debug)]
 struct Cli {
+    /// Repo name, used for finding log file and downloading from remote
     #[clap(long)]
     name: String,
 
+    /// Directory of nginx log
     #[clap(long)]
     log_path: PathBuf,
 
+    /// Directory of repo
     #[clap(long)]
     repo_path: PathBuf,
 
+    /// Don't really download or remove anything, just show what would be done
     #[clap(long)]
     dry_run: bool,
 
+    /// User agent to use
     #[clap(long, default_value = "yukina")]
     user_agent: String,
 
+    /// Size limit of your repo
     #[clap(long, value_parser = parse_bytes)]
     size_limit: u64,
 
+    /// Filter for urls and file paths you interested in (usually blobs of the repo)
     #[clap(long, value_parser)]
     filter: Vec<Regex>,
 }
@@ -75,6 +82,21 @@ fn get_ip_prefix_string(ip: IpAddr) -> String {
     client_prefix.to_string()
 }
 
+fn matches_filter(url: &str, filter: &[Regex]) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
+    for re in filter {
+        if re.is_match(url) {
+            return true;
+        }
+    }
+    false
+}
+
+type UserVote = Vec<(String, VoteValue)>;
+type FileStats = Vec<(String, u64)>;
+
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 struct VoteValue {
     count: u64,
@@ -96,7 +118,8 @@ impl Ord for VoteValue {
     }
 }
 
-fn stage1(args: &Cli) {
+/// Analyse nginx logs and get user votes
+fn stage1(args: &Cli) -> UserVote {
     let mut entries: Vec<_> = std::fs::read_dir(&args.log_path)
         .expect("read log path failed")
         .filter_map(|entry| entry.ok())
@@ -173,14 +196,7 @@ fn stage1(args: &Cli) {
                 stop_iterate_flag = true;
                 continue;
             }
-            // if filter is not empty, only process the matched url
-            let mut matched = args.filter.is_empty();
-            for re in &args.filter {
-                if re.is_match(url) {
-                    matched = true;
-                }
-            }
-            if !matched {
+            if !matches_filter(url, &args.filter) {
                 continue;
             }
             let client_prefix = get_ip_prefix_string(item.client);
@@ -209,16 +225,41 @@ fn stage1(args: &Cli) {
         }
     }
 
-    // Print vote "report" for now
-    let mut vote: Vec<_> = vote.into_iter().collect();
+    // Get sorted vote "report". Items with only one vote would be ignored.
+    let mut vote: Vec<_> = vote.into_iter().filter(|(_, v)| v.count != 1).collect();
     vote.sort_by_key(|(_, size)| *size);
     vote.reverse();
-    for (url, value) in vote {
-        if value.count == 1 {
-            break;
+
+    tracing::info!("Got {} votes", vote.len());
+
+    vote
+}
+
+/// Analyse local files and get metadata of files we are interested in
+fn stage2(args: &Cli) -> FileStats {
+    let mut res = Vec::new();
+    for entry in walkdir::WalkDir::new(&args.repo_path) {
+        let entry = entry.expect("walkdir failed");
+        // We're not interested in symlinks, etc., and dirs means that we're not in the leaf node
+        if !entry.file_type().is_file() {
+            continue;
         }
-        println!("{}: {:?}", url, value);
+        let path = entry
+            .path()
+            .to_str()
+            .expect("unexpected path conversion failed");
+        if !matches_filter(path, &args.filter) {
+            continue;
+        }
+        let file_size = entry.metadata().expect("get metadata failed").len();
+        res.push((path.to_string(), file_size));
     }
+    res.sort_by_key(|(_, size)| *size);
+    res.reverse();
+
+    tracing::info!("Got {} files", res.len());
+
+    res
 }
 
 fn main() {
@@ -236,5 +277,6 @@ fn main() {
     let args = Cli::parse();
     tracing::debug!("{:?}", args);
 
-    stage1(&args);
+    let vote = stage1(&args);
+    let stats = stage2(&args);
 }
