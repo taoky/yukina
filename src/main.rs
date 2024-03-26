@@ -230,7 +230,8 @@ fn stage1(args: &Cli) -> UserVote {
     vote.sort_by_key(|(_, size)| *size);
     vote.reverse();
 
-    tracing::info!("Got {} votes", vote.len());
+    let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
+    tracing::info!("Got {} votes, total size {}", vote.len(), humansize::format_size(total_size, humansize::BINARY));
 
     vote
 }
@@ -257,7 +258,8 @@ fn stage2(args: &Cli) -> FileStats {
     res.sort_by_key(|(_, size)| *size);
     res.reverse();
 
-    tracing::info!("Got {} files", res.len());
+    let total_size = res.iter().map(|(_, size)| *size).sum::<u64>();
+    tracing::info!("Got {} files, total size {}", res.len(), humansize::format_size(total_size, humansize::BINARY));
 
     res
 }
