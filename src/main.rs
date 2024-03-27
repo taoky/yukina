@@ -4,13 +4,14 @@ use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufRead, BufReader},
     net::IpAddr,
     path::PathBuf,
     time::SystemTime,
 };
 use tracing_subscriber::EnvFilter;
+use url::Url;
 
 mod combined;
 
@@ -47,6 +48,18 @@ struct Cli {
     /// Filter for urls and file paths you interested in (usually blobs of the repo)
     #[clap(long, value_parser)]
     filter: Vec<Regex>,
+
+    /// URL of the remote repo
+    #[clap(long)]
+    url: Url,
+
+    /// Optional prefix to strip from the path after the repo name
+    #[clap(long)]
+    strip_prefix: Option<String>,
+
+    /// A kv database of file size to speed up stage3 in case yukina would run frequently
+    #[clap(long)]
+    size_database: Option<PathBuf>,
 }
 
 enum LogFileType {
@@ -94,8 +107,47 @@ fn matches_filter(url: &str, filter: &[Regex]) -> bool {
     false
 }
 
+fn relative_uri_normalize(uri: &str) -> String {
+    assert!(uri.starts_with('/'));
+    let mut url =
+        Url::parse(&format!("http://example.com{}", uri)).expect("unexpected url parse failed");
+    url.set_query(None);
+    url.set_fragment(None);
+    let mut path = url.path().to_string();
+    // replace duplicated slashes until there is no more
+    loop {
+        let new_path = path.replace("//", "/");
+        if new_path == path {
+            break;
+        }
+        path = new_path;
+    }
+    path
+}
+
 type UserVote = Vec<(String, VoteValue)>;
-type FileStats = Vec<(String, u64)>;
+/// normalized by: vote_count / (max(size, 2GB) + 1)
+/// (url, score, filesize, exists_local)
+type NormalizedVote = Vec<(String, f64, u64, bool)>;
+
+fn normalize_vote(vote_value: &VoteValue, size: u64) -> f64 {
+    let vote_count = vote_value.count;
+    let size = size.max(2 * 1024 * 1024 * 1024);
+    vote_count as f64 / (size.checked_add(1).expect("+1 overflow") as f64)
+}
+
+/// Paths in the struct are all relative to the repo root
+struct FileStats {
+    list: Vec<(String, u64)>,
+    hm: HashMap<String, u64>,
+}
+
+impl FileStats {
+    fn new(list: Vec<(String, u64)>) -> Self {
+        let hm = list.iter().cloned().collect();
+        Self { list, hm }
+    }
+}
 
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 struct VoteValue {
@@ -190,19 +242,19 @@ fn stage1(args: &Cli) -> UserVote {
         for line in bufreader.lines() {
             let line = line.expect("read line failed");
             let item = combined_parser.parse(&line).expect("parse line failed");
-            let url = &item.url;
+            let path = relative_uri_normalize(&item.url);
             let duration = now_utc.signed_duration_since(item.time);
             if duration.num_hours() > 24 * 7 {
                 stop_iterate_flag = true;
                 continue;
             }
-            if !matches_filter(url, &args.filter) {
+            if !matches_filter(&path, &args.filter) {
                 continue;
             }
             let client_prefix = get_ip_prefix_string(item.client);
             let ip_prefix_url = IpPrefixUrl {
                 ip_prefix: client_prefix,
-                url: url.clone(),
+                url: path.clone(),
             };
             if let Some(last_time) = access_record.get(&ip_prefix_url) {
                 let delta = item.time.signed_duration_since(*last_time);
@@ -210,7 +262,16 @@ fn stage1(args: &Cli) -> UserVote {
                     continue;
                 }
             }
-            let vote = vote.entry(url.clone()).or_default();
+            // strip prefix of the path
+            let mut path = path
+                .strip_prefix(&format!("/{}", args.name))
+                .unwrap_or_else(|| panic!("strip prefix failed: {}", path));
+            if let Some(prefix) = &args.strip_prefix {
+                path = path
+                    .strip_prefix(prefix)
+                    .expect("unexpected strip prefix failed");
+            }
+            let vote = vote.entry(path.to_owned()).or_default();
             vote.count += 1;
             if item.status == 200 {
                 vote.success_count += 1;
@@ -231,7 +292,11 @@ fn stage1(args: &Cli) -> UserVote {
     vote.reverse();
 
     let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
-    tracing::info!("Got {} votes, total size {}", vote.len(), humansize::format_size(total_size, humansize::BINARY));
+    tracing::info!(
+        "Got {} votes, total (existing) size {}",
+        vote.len(),
+        humansize::format_size(total_size, humansize::BINARY)
+    );
 
     vote
 }
@@ -247,6 +312,8 @@ fn stage2(args: &Cli) -> FileStats {
         }
         let path = entry
             .path()
+            .strip_prefix(args.repo_path.clone())
+            .expect("unexpected strip prefix failed")
             .to_str()
             .expect("unexpected path conversion failed");
         if !matches_filter(path, &args.filter) {
@@ -259,12 +326,177 @@ fn stage2(args: &Cli) -> FileStats {
     res.reverse();
 
     let total_size = res.iter().map(|(_, size)| *size).sum::<u64>();
-    tracing::info!("Got {} files, total size {}", res.len(), humansize::format_size(total_size, humansize::BINARY));
+    tracing::info!(
+        "Got {} files, total size {}",
+        res.len(),
+        humansize::format_size(total_size, humansize::BINARY)
+    );
 
+    FileStats::new(res)
+}
+
+/// Get size of non-existing files, and normalize vote value
+async fn stage3(
+    args: &Cli,
+    vote: &UserVote,
+    stats: &FileStats,
+    client: &reqwest::Client,
+    size_db: Option<sled::Db>,
+) -> NormalizedVote {
+    let mut res = Vec::new();
+    for vote_item in vote {
+        let (url_path, vote_value) = vote_item;
+        // Check if it exists
+        let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
+            tracing::debug!("File exists: {} ({})", url_path, value);
+            (*value, true, true)
+        } else {
+            // if size_db, require sled first
+            let mut size: Option<u64> = None;
+            if let Some(db) = &size_db {
+                if let Ok(Some(s)) = db.get(url_path) {
+                    if let [b0, b1, b2, b3, b4, b5, b6, b7] = *s {
+                        size = Some(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, b6, b7]));
+                    }
+                }
+            }
+            if let Some(size) = size {
+                (size, false, true)
+            } else {
+                let url = args
+                    .url
+                    .clone()
+                    .join(url_path.trim_start_matches('/'))
+                    .expect("join url failed");
+                tracing::debug!("Heading {:?}", url);
+                let res = client.head(url).send().await.expect("request failed");
+                tracing::debug!("Response: {:?}", res);
+                match res.error_for_status() {
+                    Ok(res) => {
+                        let size = res
+                            .headers()
+                            .get("content-length")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| v.parse::<u64>().ok())
+                            .unwrap_or(0);
+                        if size == 0 {
+                            tracing::warn!("Empty file: {}", url_path);
+                        }
+                        tracing::debug!(
+                            "File does not exist locally: {} (remote {})",
+                            url_path,
+                            size
+                        );
+                        if let Some(db) = &size_db {
+                            if let Err(e) = db.insert(url_path, &size.to_le_bytes()) {
+                                tracing::warn!("Size db insert failed: {}", e);
+                            }
+                        }
+                        (size, false, true)
+                    }
+                    Err(e) => {
+                        tracing::info!("Invalid file ({}): {}", e, url_path);
+                        (0, false, false)
+                    }
+                }
+            }
+        };
+        if valid {
+            res.push((
+                url_path.clone(),
+                normalize_vote(vote_value, size),
+                size,
+                exists,
+            ));
+        }
+    }
     res
 }
 
-fn main() {
+/// Generate report (for now)
+fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats) {
+    let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
+    let max = args.size_limit;
+
+    // Two "queues". We take items from tail.
+    let mut to_download_queue: Vec<_> = normalized_vote
+        .iter()
+        .filter(|(_, _, _, x)| !*x)
+        .map(|(a, b, c, _)| (a.clone(), *b, *c))
+        .collect();
+    // sorted score small -> large, filesize large -> small (taking large score first)
+    to_download_queue.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
+        std::cmp::Ordering::Equal => b.2.cmp(&a.2),
+        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+    });
+    let mut to_remove_queue: Vec<_> = normalized_vote
+        .iter()
+        .filter(|(_, _, _, x)| *x)
+        .map(|(a, b, c, _)| (a.clone(), *b, *c))
+        .collect();
+    // for files get no votes, add to to_remove_queue with 0 score
+    {
+        let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|(x, _, _)| x).cloned().collect();
+        for item in stats.list.clone() {
+            if !to_remove_hs.contains(&item.0) {
+                to_remove_queue.push((item.0, 0.0, item.1));
+            }
+        }
+    }
+    // sorted score large -> small, filesize large -> small (taking small score first)
+    to_remove_queue.sort_by(|a, b| match b.1.partial_cmp(&a.1).unwrap() {
+        std::cmp::Ordering::Equal => a.2.cmp(&b.2),
+        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
+        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
+    });
+
+    while let Some(item) = to_download_queue.pop() {
+        // does size fit?
+        let remote_score = item.1;
+        let remote_size = item.2;
+        if sum.checked_add(remote_size).unwrap() <= max {
+            // TODO: download
+            tracing::info!("Download: {:?}", item);
+            sum += remote_size;
+        } else if sum <= max {
+            // well, we have to remove something, or stop the process
+            let local_item = to_remove_queue.pop();
+            let local_item = match local_item {
+                None => {
+                    // file too large? skip this one
+                    tracing::info!("Skipped {:?} as it's too large", item);
+                    continue;
+                }
+                Some(l) => l,
+            };
+            // Compare score, if the file to download is even less popular than local one, stop.
+            let local_size = local_item.2;
+            let local_score = local_item.1;
+            if local_score >= remote_score {
+                tracing::info!("Stopped downloading/removing.");
+                break;
+            }
+            // TODO: download remote file
+            tracing::info!("Download: {:?}", item);
+            sum += remote_size;
+            // TODO: remove local file
+            tracing::info!("Remove: {:?}", local_item);
+            sum -= local_size;
+        } else {
+            // well, it's too large even don't get anything
+            // just remove!
+            let local_item = to_remove_queue
+                .pop()
+                .expect("Nothing to remove while size exceeds");
+            tracing::info!("Remove: {:?}", local_item);
+            sum -= local_item.2;
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
     std::env::set_var(
         "RUST_LOG",
         format!("info,{}", std::env::var("RUST_LOG").unwrap_or_default()),
@@ -279,6 +511,47 @@ fn main() {
     let args = Cli::parse();
     tracing::debug!("{:?}", args);
 
+    let client = reqwest::Client::builder()
+        .user_agent(&args.user_agent)
+        .redirect(reqwest::redirect::Policy::default())
+        .build()
+        .expect("build client failed");
+
+    let size_db = if let Some(sd_path) = &args.size_database {
+        let db = sled::open(sd_path);
+        let db = match db {
+            Ok(db) => db,
+            Err(e) => {
+                tracing::warn!("Open size database failed: {}", e);
+                tracing::warn!("Remove and try again...");
+                let _ = std::fs::remove_file(sd_path);
+                sled::open(sd_path).expect("open failed when tried again")
+            }
+        };
+        Some(db)
+    } else {
+        None
+    };
+
+    // change cwd
+    std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
+
     let vote = stage1(&args);
     let stats = stage2(&args);
+    let normalized_vote = stage3(&args, &vote, &stats, &client, size_db).await;
+    stage4(&args, &normalized_vote, &stats);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_relative_uri_normalize() {
+        assert_eq!(
+            relative_uri_normalize("/test/a/../test?aaa=bbb&ccc=ddd#aaaaa"),
+            "/test/test"
+        );
+        assert_eq!(relative_uri_normalize("/test////abc"), "/test/abc")
+    }
 }
