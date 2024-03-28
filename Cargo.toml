@@ -2,6 +2,7 @@
 name = "yukina"
 version = "0.1.0"
 edition = "2021"
+description = "YUKI-based Next-generation Async-cache"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,6 +23,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.0"
 walkdir = "2.5.0"
+shadow-rs = "0.26.1"
 
 [dev-dependencies]
 test-log = { version = "0.2.14", default-features = false, features = ["trace"] }
+
+[build-dependencies]
+shadow-rs = "0.26.1"

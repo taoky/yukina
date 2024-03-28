@@ -13,6 +13,9 @@ use std::{
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
+use shadow_rs::shadow;
+shadow!(build);
+
 mod combined;
 mod term;
 
@@ -21,6 +24,9 @@ fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
 }
 
 #[derive(Parser, Debug)]
+#[command(about)]
+#[command(propagate_version = true)]
+#[command(version = build::SHORT_COMMIT)]
 struct Cli {
     /// Repo name, used for finding log file and downloading from remote
     #[clap(long)]
@@ -559,6 +565,9 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .with_ansi(enable_color)
         .init();
+
+    // Print version info in debug mode
+    tracing::debug!("{}", build::CLAP_LONG_VERSION);
 
     let bind_address = match std::env::var("BIND_ADDRESS").ok() {
         Some(s) => {

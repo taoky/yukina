@@ -1,6 +1,6 @@
 # yukina
 
-YUKI-based Next-generation Async cache
+YUKI-based Next-generation Async-cache
 
 ## Approach
 
