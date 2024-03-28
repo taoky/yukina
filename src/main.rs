@@ -4,7 +4,6 @@ use clap::Parser;
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     io::{BufRead, BufReader},
@@ -14,6 +13,7 @@ use std::{
 };
 use tracing_subscriber::EnvFilter;
 use url::Url;
+use yukina::SizeDBItem;
 
 use shadow_rs::shadow;
 shadow!(build);
@@ -186,12 +186,6 @@ impl Ord for VoteValue {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.count.cmp(&other.count)
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SizeDBItem {
-    size: Option<u64>,
-    record_time: DateTime<Utc>,
 }
 
 /// Analyse nginx logs and get user votes
@@ -371,7 +365,7 @@ fn stage2(args: &Cli) -> FileStats {
     FileStats::new(res)
 }
 
-fn insert_db(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
+pub fn insert_db(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
     if let Some(db) = db {
         let size_item = SizeDBItem {
             size,
