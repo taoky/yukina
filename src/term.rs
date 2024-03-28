@@ -13,7 +13,7 @@ macro_rules! progressbar {
         indicatif::ProgressBar::with_draw_target(
             $len,
             indicatif::ProgressDrawTarget::term_like_with_hz(
-                Box::new(crate::term::AlternativeTerm::buffered_stdout()),
+                Box::new($crate::term::AlternativeTerm::buffered_stdout()),
                 1,
             ),
         )
