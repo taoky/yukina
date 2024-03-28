@@ -127,8 +127,13 @@ fn relative_uri_normalize(uri: &str) -> String {
 
 type UserVote = Vec<(String, VoteValue)>;
 /// normalized by: vote_count / (max(size, 2GB) + 1)
-/// (url, score, filesize, exists_local)
-type NormalizedVote = Vec<(String, f64, u64, bool)>;
+#[derive(Debug, Copy, Clone)]
+struct NormalizedFileStats {
+    score: f64,
+    size: u64,
+    exists_local: bool,
+}
+type NormalizedVote = Vec<(String, NormalizedFileStats)>;
 
 fn normalize_vote(vote_value: &VoteValue, size: u64) -> f64 {
     let vote_count = vote_value.count;
@@ -404,9 +409,11 @@ async fn stage3(
         if valid {
             res.push((
                 url_path.clone(),
-                normalize_vote(vote_value, size),
-                size,
-                exists,
+                NormalizedFileStats {
+                    score: normalize_vote(vote_value, size),
+                    size,
+                    exists_local: exists,
+                },
             ));
         }
     }
@@ -414,47 +421,53 @@ async fn stage3(
 }
 
 /// Generate report (for now)
-fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats) {
+async fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats) {
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
     let max = args.size_limit;
 
     // Two "queues". We take items from tail.
     let mut to_download_queue: Vec<_> = normalized_vote
         .iter()
-        .filter(|(_, _, _, x)| !*x)
-        .map(|(a, b, c, _)| (a.clone(), *b, *c))
+        .filter(|x| !x.1.exists_local)
         .collect();
     // sorted score small -> large, filesize large -> small (taking large score first)
-    to_download_queue.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
-        std::cmp::Ordering::Equal => b.2.cmp(&a.2),
+    to_download_queue.sort_by(|a, b| match a.1.score.partial_cmp(&b.1.score).unwrap() {
+        std::cmp::Ordering::Equal => b.1.size.cmp(&a.1.size),
         std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
         std::cmp::Ordering::Less => std::cmp::Ordering::Less,
     });
     let mut to_remove_queue: Vec<_> = normalized_vote
         .iter()
-        .filter(|(_, _, _, x)| *x)
-        .map(|(a, b, c, _)| (a.clone(), *b, *c))
+        .filter(|x| x.1.exists_local)
+        .cloned()
         .collect();
     // for files get no votes, add to to_remove_queue with 0 score
     {
-        let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|(x, _, _)| x).cloned().collect();
+        let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|x| x.0.clone()).collect();
         for item in stats.list.clone() {
             if !to_remove_hs.contains(&item.0) {
-                to_remove_queue.push((item.0, 0.0, item.1));
+                to_remove_queue.push((
+                    item.0,
+                    NormalizedFileStats {
+                        score: 0.0,
+                        size: item.1,
+                        exists_local: true,
+                    },
+                ));
             }
         }
     }
     // sorted score large -> small, filesize large -> small (taking small score first)
-    to_remove_queue.sort_by(|a, b| match b.1.partial_cmp(&a.1).unwrap() {
-        std::cmp::Ordering::Equal => a.2.cmp(&b.2),
+    to_remove_queue.sort_by(|a, b| match b.1.score.partial_cmp(&a.1.score).unwrap() {
+        std::cmp::Ordering::Equal => a.1.size.cmp(&b.1.size),
         std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
         std::cmp::Ordering::Less => std::cmp::Ordering::Less,
     });
 
     while let Some(item) = to_download_queue.pop() {
         // does size fit?
-        let remote_score = item.1;
-        let remote_size = item.2;
+        let remote_score = item.1.score;
+        let remote_size = item.1.size;
         if sum.checked_add(remote_size).unwrap() <= max {
             // TODO: download
             tracing::info!("Download: {:?}", item);
@@ -471,8 +484,8 @@ fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats) {
                 Some(l) => l,
             };
             // Compare score, if the file to download is even less popular than local one, stop.
-            let local_size = local_item.2;
-            let local_score = local_item.1;
+            let local_size = local_item.1.size;
+            let local_score = local_item.1.score;
             if local_score >= remote_score {
                 tracing::info!("Stopped downloading/removing.");
                 break;
@@ -489,8 +502,9 @@ fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats) {
             let local_item = to_remove_queue
                 .pop()
                 .expect("Nothing to remove while size exceeds");
+            // TODO: remove local file
             tracing::info!("Remove: {:?}", local_item);
-            sum -= local_item.2;
+            sum -= local_item.1.size;
         }
     }
 }
@@ -539,7 +553,7 @@ async fn main() {
     let vote = stage1(&args);
     let stats = stage2(&args);
     let normalized_vote = stage3(&args, &vote, &stats, &client, size_db).await;
-    stage4(&args, &normalized_vote, &stats);
+    stage4(&args, &normalized_vote, &stats).await;
 }
 
 #[cfg(test)]
