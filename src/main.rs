@@ -363,12 +363,19 @@ async fn stage3(
 ) -> NormalizedVote {
     let mut res = Vec::new();
     let progressbar = progressbar!(Some(vote.len() as u64));
+    // Stats counters
+    let mut local_hit = 0;
+    let mut sizedb_hit = 0;
+    let mut remote_hit = 0;
+    let mut remote_miss = 0;
+
     for vote_item in vote {
         progressbar.inc(1);
         let (url_path, vote_value) = vote_item;
         // Check if it exists
         let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
             tracing::debug!("File exists: {} ({})", url_path, value);
+            local_hit += 1;
             (*value, true, true)
         } else {
             // if size_db, require sled first
@@ -386,6 +393,7 @@ async fn stage3(
                     url_path,
                     size
                 );
+                sizedb_hit += 1;
                 (size, false, true)
             } else {
                 let url = args
@@ -412,6 +420,7 @@ async fn stage3(
                             url_path,
                             size
                         );
+                        remote_hit += 1;
                         if let Some(db) = &size_db {
                             if let Err(e) = db.insert(url_path, &size.to_le_bytes()) {
                                 tracing::warn!("Size db insert failed: {}", e);
@@ -421,6 +430,7 @@ async fn stage3(
                     }
                     Err(e) => {
                         tracing::info!("Invalid file ({}): {}", e, url_path);
+                        remote_miss += 1;
                         (0, false, false)
                     }
                 }
@@ -438,6 +448,13 @@ async fn stage3(
         }
     }
     progressbar.finish();
+    tracing::info!(
+        "Local hit: {}, SizeDB hit: {}, Remote hit: {}, Remote miss: {}",
+        local_hit,
+        sizedb_hit,
+        remote_hit,
+        remote_miss
+    );
     res
 }
 
