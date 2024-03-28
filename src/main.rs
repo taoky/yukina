@@ -560,12 +560,25 @@ async fn main() {
         .with_ansi(enable_color)
         .init();
 
+    let bind_address = match std::env::var("BIND_ADDRESS").ok() {
+        Some(s) => {
+            let s = s.trim();
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_owned())
+            }
+        }
+        None => None,
+    };
+
     let args = Cli::parse();
     tracing::debug!("{:?}", args);
 
     let client = reqwest::Client::builder()
         .user_agent(&args.user_agent)
         .redirect(reqwest::redirect::Policy::default())
+        .local_address(bind_address.map(|s| s.parse().expect("parse bind address failed")))
         .build()
         .expect("build client failed");
 
