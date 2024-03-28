@@ -211,6 +211,10 @@ fn stage1(args: &Cli) -> UserVote {
     let mut vote: HashMap<String, VoteValue> = HashMap::new();
 
     let mut stop_iterate_flag = false;
+    // global hit/miss stats
+    let mut hit = 0;
+    let mut miss = 0;
+
     for entry in entries {
         if stop_iterate_flag {
             tracing::info!(
@@ -280,8 +284,10 @@ fn stage1(args: &Cli) -> UserVote {
             vote.count += 1;
             if item.status == 200 {
                 vote.success_count += 1;
+                hit += 1;
             } else if item.status == 302 || item.status == 404 {
                 vote.reject_count += 1;
+                miss += 1;
             } else {
                 tracing::debug!("Unknown status: {}", item.status);
                 vote.unknown_count += 1;
@@ -301,6 +307,12 @@ fn stage1(args: &Cli) -> UserVote {
         "Got {} votes, total (existing) size {}",
         vote.len(),
         humansize::format_size(total_size, humansize::BINARY)
+    );
+    tracing::info!(
+        "(From nginx log) Hit: {}, Miss: {}, Hit rate: {:.2}%",
+        hit,
+        miss,
+        hit as f64 / (hit + miss) as f64 * 100.0
     );
 
     vote
