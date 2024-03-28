@@ -39,7 +39,7 @@ struct Cli {
     dry_run: bool,
 
     /// User agent to use
-    #[clap(long, default_value = "yukina")]
+    #[clap(long, default_value = "yukina (https://github.com/taoky/yukina)")]
     user_agent: String,
 
     /// Size limit of your repo
