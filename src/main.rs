@@ -420,7 +420,7 @@ async fn stage3(
                             let duration = Utc::now()
                                 .signed_duration_since(s.record_time)
                                 .to_std()
-                                .unwrap_or(std::time::Duration::default());
+                                .unwrap_or_default();
                             if duration > ttl {
                                 exceeded_miss_ttl = true;
                                 let _ = db.remove(url_path);
