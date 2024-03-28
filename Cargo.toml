@@ -8,7 +8,7 @@ description = "YUKI-based Next-generation Async-cache"
 
 [dependencies]
 anyhow = { version = "1.0.81", features = ["backtrace"] }
-chrono = "0.4.35"
+chrono = { version = "0.4.35", features = ["serde"] }
 clap = { version = "4.5.3", features = ["derive"] }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing"] }
 humansize = "2.1.3"
@@ -24,6 +24,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.0"
 walkdir = "2.5.0"
 shadow-rs = "0.26.1"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3.3"
+humantime = "2.1.0"
 
 [dev-dependencies]
 test-log = { version = "0.2.14", default-features = false, features = ["trace"] }
