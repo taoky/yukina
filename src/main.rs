@@ -14,6 +14,7 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 
 mod combined;
+mod term;
 
 fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
     parse_size(s).map_err(|e| clap::Error::raw(clap::error::ErrorKind::ValueValidation, e))
@@ -361,7 +362,9 @@ async fn stage3(
     size_db: Option<sled::Db>,
 ) -> NormalizedVote {
     let mut res = Vec::new();
+    let progressbar = progressbar!(Some(vote.len() as u64));
     for vote_item in vote {
+        progressbar.inc(1);
         let (url_path, vote_value) = vote_item;
         // Check if it exists
         let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
@@ -378,6 +381,11 @@ async fn stage3(
                 }
             }
             if let Some(size) = size {
+                tracing::debug!(
+                    "File does not exist locally: {} (sizedb {})",
+                    url_path,
+                    size
+                );
                 (size, false, true)
             } else {
                 let url = args
@@ -429,6 +437,7 @@ async fn stage3(
             ));
         }
     }
+    progressbar.finish();
     res
 }
 
