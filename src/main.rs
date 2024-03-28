@@ -1,3 +1,4 @@
+#![warn(clippy::cognitive_complexity)]
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
