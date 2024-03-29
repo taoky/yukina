@@ -553,6 +553,17 @@ async fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats)
         std::cmp::Ordering::Less => std::cmp::Ordering::Less,
     });
 
+    while sum > max {
+        // well, it's too large even don't get anything
+        // just remove!
+        let local_item = to_remove_queue
+            .pop()
+            .expect("Nothing to remove while size exceeds");
+        // TODO: remove local file
+        tracing::info!("Remove: {:?}", local_item);
+        sum -= local_item.1.size;
+    }
+
     while let Some(item) = to_download_queue.pop() {
         // does size fit?
         let remote_score = item.1.score;
@@ -586,14 +597,7 @@ async fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats)
             tracing::info!("Remove: {:?}", local_item);
             sum -= local_size;
         } else {
-            // well, it's too large even don't get anything
-            // just remove!
-            let local_item = to_remove_queue
-                .pop()
-                .expect("Nothing to remove while size exceeds");
-            // TODO: remove local file
-            tracing::info!("Remove: {:?}", local_item);
-            sum -= local_item.1.size;
+            unreachable!("sum > max");
         }
     }
 }
