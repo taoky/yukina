@@ -272,7 +272,7 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
         return Ok(0);
     }
     tracing::info!("Downloading {}", url);
-    async fn download(args: &Cli, url: &str, client: &reqwest::Client) -> Result<usize> {
+    async fn download(args: &Cli, path: &str, url: &str, client: &reqwest::Client) -> Result<usize> {
         let resp = client.get(url).send().await?.error_for_status()?;
         let total_size = resp.content_length();
         let progressbar = progressbar!(total_size);
@@ -290,7 +290,7 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
         }
         let mtime = get_response_mtime(&resp);
 
-        let tmp_path = args.repo_path.join(format!("{}.tmp", url));
+        let tmp_path = args.repo_path.join(format!("{}.tmp", path));
         {
             let mut dest_file = std::fs::File::create(&tmp_path)?;
             let mut stream = resp.bytes_stream();
@@ -308,14 +308,14 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
                 }
             }
         }
-        let target_path = args.repo_path.join(url);
+        let target_path = args.repo_path.join(path);
         std::fs::rename(&tmp_path, &target_path)?;
         progressbar.finish();
         Ok(std::fs::metadata(&target_path)?.len() as usize)
     }
-    match again(|| download(args, url.as_str(), client), args.retry).await {
+    match again(|| download(args, path, url.as_str(), client), args.retry).await {
         Ok(filesize) => {
-            tracing::info!("Downloaded: {} -> {:?}", url, args.repo_path.join(url.as_str()));
+            tracing::info!("Downloaded: {} -> {:?}", url, args.repo_path.join(path));
             Ok(filesize)
         }
         Err(e) => {
