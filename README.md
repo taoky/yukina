@@ -82,6 +82,8 @@ Options:
           Size database Miss TTL [default: 2d]
       --filesize-limit <FILESIZE_LIMIT>
           [default: 4g]
+      --retry <RETRY>
+          Retry count for each request [default: 3]
   -h, --help
           Print help
   -V, --version

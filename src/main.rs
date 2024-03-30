@@ -2,7 +2,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use clap::Parser;
-use futures_util::stream::StreamExt;
+use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
@@ -76,6 +76,10 @@ struct Cli {
     /// Single file size limit, files larger than this will NOT be counted/downloaded
     #[clap(long, value_parser = parse_bytes, default_value = "4g")]
     filesize_limit: u64,
+
+    /// Retry count for each request.
+    #[clap(long, default_value_t = 3)]
+    retry: usize,
 }
 
 const DOWNLOAD_ERROR_THRESHOLD: usize = 5;
@@ -210,6 +214,25 @@ fn construct_url(args: &Cli, url_path: &str) -> Url {
     args.url.clone().join(url_path).expect("join url failed")
 }
 
+async fn again<T, Fut, F: Fn() -> Fut>(f: F, retry: usize) -> Result<T>
+where
+    Fut: Future<Output = Result<T>>,
+{
+    let mut count = 0;
+    loop {
+        match f().await {
+            Ok(x) => return Ok(x),
+            Err(e) => {
+                tracing::warn!("Error: {:?}, retrying {}/{}", e, count, retry);
+                count += 1;
+                if count > retry {
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
 fn remove_file(args: &Cli, path: &str) -> Result<(), std::io::Error> {
     let full_path = args.repo_path.join(path);
     if full_path.exists() {
@@ -228,6 +251,16 @@ fn remove_file(args: &Cli, path: &str) -> Result<(), std::io::Error> {
             std::io::ErrorKind::NotFound,
             format!("File not found: {:?}", full_path),
         ))
+    }
+}
+
+async fn head_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<reqwest::Response> {
+    match again(|| async { Ok(client.head(url).send().await?) }, args.retry).await {
+        Ok(resp) => Ok(resp),
+        Err(e) => {
+            tracing::warn!("Head failed: {}", e);
+            Err(e)
+        }
     }
 }
 
@@ -280,7 +313,7 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
         progressbar.finish();
         Ok(std::fs::metadata(&target_path)?.len() as usize)
     }
-    match download(args, url.as_str(), client).await {
+    match again(|| download(args, url.as_str(), client), args.retry).await {
         Ok(filesize) => {
             tracing::info!("Downloaded: {}", url);
             Ok(filesize)

@@ -9,9 +9,9 @@ use std::{
 use yukina::SizeDBItem;
 
 use crate::{
-    combined, construct_url, deduce_log_file_type, download_file, get_ip_prefix_string, insert_db,
-    matches_filter, normalize_vote, progressbar, relative_uri_normalize, remove_file, Cli,
-    FileStats, LogFileType, NormalizedFileStats, NormalizedVote, UserVote, VoteValue,
+    combined, construct_url, deduce_log_file_type, download_file, get_ip_prefix_string, head_file,
+    insert_db, matches_filter, normalize_vote, progressbar, relative_uri_normalize, remove_file,
+    Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote, UserVote, VoteValue,
 };
 
 /// Analyse nginx logs and get user votes
@@ -278,7 +278,9 @@ pub async fn stage3(
             } else {
                 let url = construct_url(args, url_path);
                 tracing::debug!("Heading {:?}", url);
-                let res = client.head(url).send().await.expect("request failed");
+                let res = head_file(args, url.as_str(), client)
+                    .await
+                    .expect("head failed");
                 tracing::debug!("Response: {:?}", res);
                 match res.error_for_status() {
                     Ok(res) => {
