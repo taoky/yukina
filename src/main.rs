@@ -482,7 +482,10 @@ async fn stage3(
                     }
                     Err(e) => {
                         tracing::info!("Invalid file ({}): {}", e, url_path);
-                        insert_db(size_db.as_ref(), url_path, None);
+                        let is_404 = e.status().map_or(false, |s| s == 404);
+                        if is_404 {
+                            insert_db(size_db.as_ref(), url_path, None);
+                        }
                         remote_miss += 1;
                         (0, false, false)
                     }
