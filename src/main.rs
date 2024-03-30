@@ -24,10 +24,18 @@ fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
     parse_size(s).map_err(|e| clap::Error::raw(clap::error::ErrorKind::ValueValidation, e))
 }
 
+fn get_version() -> &'static str {
+    if build::SHORT_COMMIT.is_empty() {
+        build::LAST_TAG
+    } else {
+        build::SHORT_COMMIT
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(about)]
 #[command(propagate_version = true)]
-#[command(version = build::SHORT_COMMIT)]
+#[command(version = get_version())]
 struct Cli {
     /// Repo name, used for finding log file and downloading from remote
     #[clap(long)]
