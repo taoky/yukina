@@ -268,7 +268,7 @@ async fn head_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<re
 async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Result<usize> {
     let url = construct_url(args, path);
     if args.dry_run {
-        tracing::info!("Would download: {}", url);
+        tracing::info!("Would download: {} -> {:?}", url, args.repo_path.join(path));
         return Ok(0);
     }
     tracing::info!("Downloading {}", url);
@@ -315,7 +315,7 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
     }
     match again(|| download(args, url.as_str(), client), args.retry).await {
         Ok(filesize) => {
-            tracing::info!("Downloaded: {}", url);
+            tracing::info!("Downloaded: {} -> {:?}", url, args.repo_path.join(url.as_str()));
             Ok(filesize)
         }
         Err(e) => {
