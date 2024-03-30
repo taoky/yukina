@@ -155,7 +155,7 @@ type NormalizedVote = Vec<(String, NormalizedFileStats)>;
 fn normalize_vote(vote_value: &VoteValue, size: u64) -> f64 {
     let vote_count = vote_value.count;
     let size = size.max(2 * 1024 * 1024 * 1024);
-    vote_count as f64 / (size.checked_add(1).expect("+1 overflow") as f64)
+    vote_count as f64 / (size.checked_add(1).expect("+1 overflow") as f64 / 1024.0 / 1024.0)
 }
 
 /// Paths in the struct are all relative to the repo root
