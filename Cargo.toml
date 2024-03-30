@@ -3,6 +3,7 @@ name = "yukina"
 version = "0.1.0"
 edition = "2021"
 description = "YUKI-based Next-generation Async-cache"
+default-run = "yukina"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
