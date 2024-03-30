@@ -73,6 +73,9 @@ struct Cli {
     /// Size database Miss TTL
     #[clap(long, default_value = "2d")]
     size_database_ttl: humantime::Duration,
+
+    #[clap(long, value_parser = parse_bytes, default_value = "4g")]
+    filesize_limit: u64,
 }
 
 enum LogFileType {
@@ -487,6 +490,10 @@ async fn stage3(
             }
         };
         if valid {
+            if size > args.filesize_limit {
+                tracing::warn!("File too large: {} ({})", url_path, size);
+                continue;
+            }
             res.push((
                 url_path.clone(),
                 NormalizedFileStats {
@@ -574,28 +581,35 @@ async fn stage4(args: &Cli, normalized_vote: &NormalizedVote, stats: &FileStats)
             sum += remote_size;
         } else if sum <= max {
             // well, we have to remove something, or stop the process
-            let local_item = to_remove_queue.pop();
-            let local_item = match local_item {
-                None => {
-                    // file too large? skip this one
-                    tracing::info!("Skipped {:?} as it's too large", item);
-                    continue;
+            let mut stop_flag = false;
+            while sum.checked_add(remote_size).unwrap() > max {
+                let local_item = to_remove_queue.pop();
+                let local_item = match local_item {
+                    None => {
+                        // file too large? skip this one
+                        tracing::info!("Skipped {:?} as it's too large", item);
+                        continue;
+                    }
+                    Some(l) => l,
+                };
+                // Compare score, if the file to download is even less popular than local one, stop.
+                let local_size = local_item.1.size;
+                let local_score = local_item.1.score;
+                if local_score >= remote_score {
+                    tracing::info!("Stopped downloading/removing.");
+                    stop_flag = true;
+                    break;
                 }
-                Some(l) => l,
-            };
-            // Compare score, if the file to download is even less popular than local one, stop.
-            let local_size = local_item.1.size;
-            let local_score = local_item.1.score;
-            if local_score >= remote_score {
-                tracing::info!("Stopped downloading/removing.");
+                // TODO: remove local file
+                tracing::info!("Remove: {:?}", local_item);
+                sum -= local_size;
+            }
+            if stop_flag {
                 break;
             }
             // TODO: download remote file
             tracing::info!("Download: {:?}", item);
             sum += remote_size;
-            // TODO: remove local file
-            tracing::info!("Remove: {:?}", local_item);
-            sum -= local_size;
         } else {
             unreachable!("sum > max");
         }
