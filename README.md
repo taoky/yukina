@@ -8,6 +8,47 @@ YUKI-based Next-generation Async-cache
 2. Get local interesting files metadata
 3. Remove files that are not "popular", try to get new files while under the limit
 
+## Nginx configuration
+
+An example, assuming that access_log is in default combined format:
+
+```nginx
+location /pypi/ {
+    access_log /var/log/nginx/cacheproxy/pypi.log;
+    try_files $uri $uri/ @pypi_302;
+}
+
+location @pypi_302 {
+    access_log /var/log/nginx/cacheproxy/pypi.log;
+    # -> $scheme://mirrors.example.com/pypi/...
+    return 302 $scheme://mirrors.example.com$request_uri;
+}
+
+location /anaconda/ {
+    access_log /var/log/nginx/cacheproxy/anaconda.log;
+    try_files $uri $uri/ @anaconda_302;
+}
+
+location @anaconda_302 {
+    access_log /var/log/nginx/cacheproxy/anaconda.log;
+    # -> $scheme://mirrors.example.com/anaconda/...
+    return 302 $scheme://mirrors.example.com$request_uri;
+}
+
+location /nix-channels/store/ {
+    access_log /var/log/nginx/cacheproxy/nix-channels.log;
+    # disable autoindex, there are TOO MANY files
+    autoindex off;
+    try_files $uri $uri/ @nixchannels_404;
+}
+
+location @nixchannels_404 {
+    access_log /var/log/nginx/cacheproxy/nix-channels.log;
+    # just return 404, nix knows how to handle it
+    return 404;
+}
+```
+
 ## Usage
 
 ```console
