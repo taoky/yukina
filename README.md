@@ -88,7 +88,7 @@ Options:
           Print version
 ```
 
-KV tool:
+`kv` is a very simple wrapper around `sled` (same as the version yukina uses). KV tool:
 
 ```console
 $ cargo run --bin kv -- --help
@@ -103,6 +103,8 @@ Commands:
 Options:
   -h, --help  Print help
 ```
+
+TODO: examples in yuki configuration
 
 ## Naming
 
