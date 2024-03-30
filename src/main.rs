@@ -141,6 +141,7 @@ fn relative_uri_normalize(uri: &str) -> String {
     path
 }
 
+/// URL in UserVote shall not start with `/`: it is relative to the repo root.
 type UserVote = Vec<(String, VoteValue)>;
 /// normalized by: vote_count / (max(size, 2GB) + 1)
 #[derive(Debug, Copy, Clone)]
@@ -296,6 +297,13 @@ fn stage1(args: &Cli) -> UserVote {
                     .strip_prefix(prefix)
                     .expect("unexpected strip prefix failed");
             }
+            // path shall not start with `/`
+            if path.starts_with('/') {
+                path = path.strip_prefix('/').unwrap();
+            }
+            if path.is_empty() {
+                continue;
+            }
             let vote = vote.entry(path.to_owned()).or_default();
             vote.count += 1;
             if item.status == 200 {
@@ -349,6 +357,12 @@ fn stage2(args: &Cli) -> FileStats {
             .expect("unexpected strip prefix failed")
             .to_str()
             .expect("unexpected path conversion failed");
+        // path shall not start with `/`.
+        let path = if path.starts_with('/') {
+            path.strip_prefix('/').unwrap()
+        } else {
+            path
+        };
         if !matches_filter(path, &args.filter) {
             continue;
         }
@@ -455,7 +469,7 @@ async fn stage3(
                 let url = args
                     .url
                     .clone()
-                    .join(url_path.trim_start_matches('/'))
+                    .join(url_path)
                     .expect("join url failed");
                 tracing::debug!("Heading {:?}", url);
                 let res = client.head(url).send().await.expect("request failed");
@@ -668,6 +682,7 @@ async fn main() {
                 sled::open(sd_path).expect("open failed when tried again")
             }
         };
+        tracing::info!("Size database opened: {:?}", sd_path);
         Some(db)
     } else {
         None
