@@ -8,6 +8,11 @@ YUKI-based Next-generation Async-cache
 2. Get local interesting files metadata
 3. Remove files that are not "popular", try to get new files while under the limit
 
+## TODOs
+
+- [ ] Add examples in yuki configuration
+- [ ] Eliminate the need of `lstat()`s in stage2 (a bit slow for nix-channels)
+
 ## Nginx configuration
 
 An example, assuming that access_log is in default combined format:
@@ -105,8 +110,6 @@ Commands:
 Options:
   -h, --help  Print help
 ```
-
-TODO: examples in yuki configuration
 
 ## Naming
 
