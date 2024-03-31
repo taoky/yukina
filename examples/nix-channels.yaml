@@ -1,0 +1,12 @@
+image: ustcmirror/yukina:latest
+envs:
+  YUKINA_SIZE_LIMIT: 512g
+  YUKINA_FILTER: --filter narinfo$ --filter nar.xz$
+  YUKINA_EXTRA: --strip-prefix /store
+  UPSTREAM: https://cache.nixos.org/
+cron: 50 1/4 * * *
+logRotCycle: 10
+name: nix-channels
+storageDir: /srv/repo/nix-channels/store
+volumes:
+  /var/log/nginx/cacheproxy: /nginx-log:ro

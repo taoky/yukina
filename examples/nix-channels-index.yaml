@@ -1,0 +1,7 @@
+image: ustcmirror/nix-channels:latest
+envs:
+  NIX_MIRROR_RELEASES_ONLY: 1
+cron: 15 0 * * *
+logRotCycle: 10
+name: nix-channels-index
+storageDir: /srv/repo/nix-channels

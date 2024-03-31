@@ -10,7 +10,7 @@ YUKI-based Next-generation Async-cache
 
 ## TODOs
 
-- [ ] Add examples in yuki configuration
+- [x] Add examples in yuki configuration
 - [x] Eliminate the need of `lstat()`s in stage2 (a bit slow for nix-channels)
 
 ## Nginx configuration
@@ -53,6 +53,10 @@ location @nixchannels_404 {
     return 404;
 }
 ```
+
+## Yuki configuration
+
+See [examples](examples/).
 
 ## Usage
 
@@ -117,4 +121,4 @@ Options:
 
 "Yukina" means "YUKI-based Next-generation Async-cache"...OK, you might not find that very convincing, neither do I. Actually, this name comes from [Yukina Minato](https://en.wikipedia.org/wiki/List_of_BanG_Dream!_characters#Yukina_Minato), the vocalist of Roselia from *BanG Dream!* series.
 
-And [yuki](https://github.com/ustclug/yuki) is a mirror management tool used inhouse in USTC mirrors (another choice besides [tunasync](https://github.com/tuna/tunasync), try it if you need!). This program actually does not require yuki, but I just want to make a pun.
+And [yuki](https://github.com/ustclug/yuki) is a mirror management tool used inhouse in USTC mirrors (another choice besides [tunasync](https://github.com/tuna/tunasync), try it if you need!). This program actually does not require yuki (yuki examples are given for your convenience), but I just want to make a pun.
