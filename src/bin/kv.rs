@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
-use yukina::SizeDBItem;
+use yukina::{db_get, LocalSizeDBItem, RemoteSizeDBItem};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -15,10 +15,26 @@ enum Commands {
     Scan(ScanArgs),
 }
 
+#[derive(ValueEnum, Debug, Clone, Copy)]
+enum Type {
+    Remote,
+    Local,
+}
+
+#[derive(Debug)]
+enum TypeResult {
+    Remote(RemoteSizeDBItem),
+    Local(LocalSizeDBItem),
+}
+
 #[derive(Parser, Debug)]
 struct Args {
+    // TODO: shared argument for clap
     #[clap(long)]
     db: PathBuf,
+
+    #[clap(long, value_enum, default_value = "remote")]
+    r#type: Type,
 
     #[clap(value_parser)]
     key: String,
@@ -29,6 +45,9 @@ struct ScanArgs {
     #[clap(long)]
     db: PathBuf,
 
+    #[clap(long, value_enum)]
+    r#type: Type,
+
     #[clap(value_parser)]
     scan_prefix: String,
 }
@@ -38,12 +57,15 @@ fn main() {
     match args.command {
         Commands::Get(args) => {
             let db = sled::open(args.db).unwrap();
-            let value = db.get(&args.key).unwrap();
-            if let Some(value) = value {
-                println!("{:?}", bincode::deserialize::<SizeDBItem>(&value).unwrap());
-            } else {
-                println!("Key not found");
-            }
+            let value = match args.r#type {
+                Type::Remote => {
+                    TypeResult::Remote(db_get::<RemoteSizeDBItem>(Some(&db), &args.key).unwrap())
+                }
+                Type::Local => {
+                    TypeResult::Local(db_get::<LocalSizeDBItem>(Some(&db), &args.key).unwrap())
+                }
+            };
+            println!("{:?}", value);
         }
         Commands::Remove(args) => {
             let db = sled::open(args.db).unwrap();
@@ -54,11 +76,15 @@ fn main() {
             let scan_prefix = args.scan_prefix;
             let mut iter = db.scan_prefix(scan_prefix.as_bytes());
             while let Some(Ok((key, value))) = iter.next() {
-                println!(
-                    "{} {:?}",
-                    std::str::from_utf8(&key).unwrap(),
-                    bincode::deserialize::<SizeDBItem>(&value).unwrap()
-                );
+                let value = match args.r#type {
+                    Type::Remote => TypeResult::Remote(
+                        bincode::deserialize::<RemoteSizeDBItem>(&value).unwrap(),
+                    ),
+                    Type::Local => {
+                        TypeResult::Local(bincode::deserialize::<LocalSizeDBItem>(&value).unwrap())
+                    }
+                };
+                println!("{} {:?}", std::str::from_utf8(&key).unwrap(), value);
             }
         }
     }

@@ -11,7 +11,7 @@ YUKI-based Next-generation Async-cache
 ## TODOs
 
 - [ ] Add examples in yuki configuration
-- [ ] Eliminate the need of `lstat()`s in stage2 (a bit slow for nix-channels)
+- [x] Eliminate the need of `lstat()`s in stage2 (a bit slow for nix-channels)
 
 ## Nginx configuration
 
@@ -70,7 +70,7 @@ Options:
       --repo-path <REPO_PATH>
           Directory of repo
       --dry-run
-          Don't really download or remove anything, just show what would be done
+          Don't really download or remove anything, just show what would be done. (HEAD requests are still sent.)
       --user-agent <USER_AGENT>
           User agent to use [default: "yukina (https://github.com/taoky/yukina)"]
       --size-limit <SIZE_LIMIT>
@@ -81,12 +81,14 @@ Options:
           URL of the remote repo
       --strip-prefix <STRIP_PREFIX>
           Optional prefix to strip from the path after the repo name
-      --size-database <SIZE_DATABASE>
+      --remote-sizedb <REMOTE_SIZEDB>
           A kv database of file size to speed up stage3 in case yukina would run frequently
+      --local-sizedb <LOCAL_SIZEDB>
+          Another kv database of file size, but for local files, to skip lstat()s
       --size-database-ttl <SIZE_DATABASE_TTL>
           Size database Miss TTL [default: 2d]
       --filesize-limit <FILESIZE_LIMIT>
-          [default: 4g]
+          Single file size limit, files larger than this will NOT be counted/downloaded [default: 4g]
       --retry <RETRY>
           Retry count for each request [default: 3]
   -h, --help

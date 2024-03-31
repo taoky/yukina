@@ -9,7 +9,7 @@ use regex::Regex;
 use std::{collections::HashMap, io::Write, net::IpAddr, path::PathBuf};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use yukina::SizeDBItem;
+use yukina::{db_set, RemoteSizeDBItem};
 
 use shadow_rs::shadow;
 shadow!(build);
@@ -75,7 +75,11 @@ struct Cli {
 
     /// A kv database of file size to speed up stage3 in case yukina would run frequently
     #[clap(long)]
-    size_database: Option<PathBuf>,
+    remote_sizedb: Option<PathBuf>,
+
+    /// Another kv database of file size, but for local files, to skip lstat()s
+    #[clap(long)]
+    local_sizedb: Option<PathBuf>,
 
     /// Size database Miss TTL
     #[clap(long, default_value = "2d")]
@@ -206,13 +210,13 @@ impl Ord for VoteValue {
     }
 }
 
-fn insert_db(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
+fn insert_remotedb(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
     if let Some(db) = db {
-        let size_item = SizeDBItem {
+        let size_item = RemoteSizeDBItem {
             size,
             record_time: Utc::now(),
         };
-        if let Err(e) = db.insert(key, bincode::serialize(&size_item).unwrap()) {
+        if let Err(e) = db_set::<RemoteSizeDBItem>(Some(db), key, size_item) {
             tracing::warn!("Size db insert failed: {}", e);
         }
     }
@@ -241,7 +245,7 @@ where
     }
 }
 
-fn remove_file(args: &Cli, path: &str) -> Result<(), std::io::Error> {
+fn remove_file(args: &Cli, path: &str, local_db: Option<&sled::Db>) -> Result<(), std::io::Error> {
     let full_path = args.repo_path.join(path);
     if full_path.exists() {
         if args.dry_run {
@@ -251,6 +255,11 @@ fn remove_file(args: &Cli, path: &str) -> Result<(), std::io::Error> {
             return Err(e);
         } else {
             tracing::info!("Removed: {:?}", full_path);
+            if let Some(db) = local_db {
+                if let Err(e) = db.remove(path) {
+                    tracing::warn!("Remove from local db failed: {:?}", e);
+                }
+            }
         }
 
         Ok(())
@@ -280,7 +289,12 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
         return Ok(0);
     }
     tracing::info!("Downloading {}", url);
-    async fn download(args: &Cli, path: &str, url: &str, client: &reqwest::Client) -> Result<usize> {
+    async fn download(
+        args: &Cli,
+        path: &str,
+        url: &str,
+        client: &reqwest::Client,
+    ) -> Result<usize> {
         let resp = client.get(url).send().await?.error_for_status()?;
         let total_size = resp.content_length();
         let progressbar = progressbar!(total_size);
@@ -333,6 +347,25 @@ async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Resu
     }
 }
 
+fn open_db(path: Option<&PathBuf>) -> Option<sled::Db> {
+    if let Some(sd_path) = &path {
+        let db = sled::open(sd_path);
+        let db = match db {
+            Ok(db) => db,
+            Err(e) => {
+                tracing::warn!("Open size database failed: {}", e);
+                tracing::warn!("Remove and try again...");
+                let _ = std::fs::remove_file(sd_path);
+                sled::open(sd_path).expect("open failed when tried again")
+            }
+        };
+        tracing::info!("Size database opened: {:?}", sd_path);
+        Some(db)
+    } else {
+        None
+    }
+}
+
 #[tokio::main]
 async fn main() {
     std::env::set_var(
@@ -371,30 +404,23 @@ async fn main() {
         .build()
         .expect("build client failed");
 
-    let size_db = if let Some(sd_path) = &args.size_database {
-        let db = sled::open(sd_path);
-        let db = match db {
-            Ok(db) => db,
-            Err(e) => {
-                tracing::warn!("Open size database failed: {}", e);
-                tracing::warn!("Remove and try again...");
-                let _ = std::fs::remove_file(sd_path);
-                sled::open(sd_path).expect("open failed when tried again")
-            }
-        };
-        tracing::info!("Size database opened: {:?}", sd_path);
-        Some(db)
-    } else {
-        None
-    };
+    let remote_sizedb = open_db(args.remote_sizedb.as_ref());
+    let local_sizedb = open_db(args.local_sizedb.as_ref());
 
     // change cwd
     std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
 
     let vote = stage1(&args);
-    let stats = stage2(&args);
-    let normalized_vote = stage3(&args, &vote, &stats, &client, size_db).await;
-    let result = stage4(&args, &normalized_vote, &stats, &client).await;
+    let stats = stage2(&args, local_sizedb.as_ref());
+    let normalized_vote = stage3(&args, &vote, &stats, &client, remote_sizedb.as_ref()).await;
+    let result = stage4(
+        &args,
+        &normalized_vote,
+        &stats,
+        &client,
+        local_sizedb.as_ref(),
+    )
+    .await;
     match result {
         Ok(_) => {
             tracing::info!("All done!");

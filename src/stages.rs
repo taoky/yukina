@@ -6,12 +6,13 @@ use std::{
     io::{BufRead, BufReader},
     time::SystemTime,
 };
-use yukina::SizeDBItem;
+use yukina::{db_get, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
     combined, construct_url, deduce_log_file_type, download_file, get_ip_prefix_string, head_file,
-    insert_db, matches_filter, normalize_vote, progressbar, relative_uri_normalize, remove_file,
-    Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote, UserVote, VoteValue,
+    insert_remotedb, matches_filter, normalize_vote, progressbar, relative_uri_normalize,
+    remove_file, Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote, UserVote,
+    VoteValue,
 };
 
 /// Analyse nginx logs and get user votes
@@ -165,7 +166,7 @@ pub fn stage1(args: &Cli) -> UserVote {
 }
 
 /// Analyse local files and get metadata of files we are interested in
-pub fn stage2(args: &Cli) -> FileStats {
+pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
     let mut res = Vec::new();
     for entry in walkdir::WalkDir::new(&args.repo_path) {
         let entry = entry.expect("walkdir failed");
@@ -188,8 +189,19 @@ pub fn stage2(args: &Cli) -> FileStats {
         if !matches_filter(path, &args.filter) {
             continue;
         }
-        let file_size = entry.metadata().expect("get metadata failed").len();
-        res.push((path.to_string(), file_size));
+        let filesize = {
+            let mut res = None;
+            if let Ok(size) = db_get::<LocalSizeDBItem>(local_sizedb, path) {
+                res = Some(size.size);
+            } else {
+                res = Some(
+                    res.unwrap_or_else(|| entry.metadata().expect("get metadata failed").len()),
+                );
+                let _ = db_set(local_sizedb, path, res.unwrap());
+            }
+            res.unwrap()
+        };
+        res.push((path.to_string(), filesize));
     }
     res.sort_by_key(|(_, size)| *size);
     res.reverse();
@@ -210,7 +222,7 @@ pub async fn stage3(
     vote: &UserVote,
     stats: &FileStats,
     client: &reqwest::Client,
-    size_db: Option<sled::Db>,
+    remote_sizedb: Option<&sled::Db>,
 ) -> NormalizedVote {
     let mut res = Vec::new();
     let progressbar = progressbar!(Some(vote.len() as u64));
@@ -231,25 +243,21 @@ pub async fn stage3(
             (*value, true, true)
         } else {
             // if size_db, require sled first
-            let mut size_item: Option<SizeDBItem> = None;
+            let mut size_item: Option<RemoteSizeDBItem> = None;
             let mut exceeded_miss_ttl = false;
-            if let Some(db) = &size_db {
-                if let Ok(Some(s)) = db.get(url_path) {
-                    if let Ok(s) = bincode::deserialize::<SizeDBItem>(&s) {
-                        if s.size.is_none() {
-                            let ttl: std::time::Duration = args.size_database_ttl.into();
-                            let duration = Utc::now()
-                                .signed_duration_since(s.record_time)
-                                .to_std()
-                                .unwrap_or_default();
-                            if duration > ttl {
-                                exceeded_miss_ttl = true;
-                                let _ = db.remove(url_path);
-                            }
-                        }
-                        size_item = Some(s);
+            if let Ok(s) = db_get::<RemoteSizeDBItem>(remote_sizedb, url_path) {
+                if s.size.is_none() {
+                    let ttl: std::time::Duration = args.size_database_ttl.into();
+                    let duration = Utc::now()
+                        .signed_duration_since(s.record_time)
+                        .to_std()
+                        .unwrap_or_default();
+                    if duration > ttl {
+                        exceeded_miss_ttl = true;
+                        let _ = remote_sizedb.unwrap().remove(url_path);
                     }
                 }
+                size_item = Some(s);
             }
 
             // a bit ugly but seems no better solution without nightly rust
@@ -299,14 +307,14 @@ pub async fn stage3(
                             size
                         );
                         remote_hit += 1;
-                        insert_db(size_db.as_ref(), url_path, Some(size));
+                        insert_remotedb(remote_sizedb, url_path, Some(size));
                         (size, false, true)
                     }
                     Err(e) => {
                         tracing::info!("Invalid file ({}): {}", e, url_path);
                         let is_404 = e.status().map_or(false, |s| s == 404);
                         if is_404 {
-                            insert_db(size_db.as_ref(), url_path, None);
+                            insert_remotedb(remote_sizedb, url_path, None);
                         }
                         remote_miss += 1;
                         (0, false, false)
@@ -364,6 +372,7 @@ pub async fn stage4(
     normalized_vote: &NormalizedVote,
     stats: &FileStats,
     client: &reqwest::Client,
+    local_sizedb: Option<&sled::Db>,
 ) -> Result<(), Stage4Error> {
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
     let max = args.size_limit;
@@ -413,7 +422,7 @@ pub async fn stage4(
         let local_item = to_remove_queue
             .pop()
             .expect("Nothing to remove while size exceeds");
-        if let Err(e) = remove_file(args, &local_item.0) {
+        if let Err(e) = remove_file(args, &local_item.0, local_sizedb) {
             // We tend to stop immediately if deletion error occurs, as it means that the total size of the repo could not be reduced.
             tracing::error!("Stopping due to error: {}", e);
             return Err(Stage4Error::LocalRemoveError(e));
@@ -442,6 +451,18 @@ pub async fn stage4(
                         sum += $remote_size;
                     } else {
                         sum += actual_size as u64;
+                        if ($remote_size as u64) != actual_size as u64 {
+                            tracing::warn!(
+                                "Size mismatch: {} (remote) vs {} (actual)",
+                                $remote_size,
+                                actual_size
+                            );
+                        }
+                        let _ = db_set::<LocalSizeDBItem>(
+                            local_sizedb,
+                            &$remote_path,
+                            actual_size.into(),
+                        );
                     }
                 }
                 Err(e) => {
@@ -480,7 +501,7 @@ pub async fn stage4(
                     stop_flag = true;
                     break;
                 }
-                if let Err(e) = remove_file(args, &local_item.0) {
+                if let Err(e) = remove_file(args, &local_item.0, local_sizedb) {
                     tracing::error!("Stopping due to error: {}", e);
                     return Err(Stage4Error::LocalRemoveError(e));
                 }
