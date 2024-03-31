@@ -197,7 +197,7 @@ pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
                 res = Some(
                     res.unwrap_or_else(|| entry.metadata().expect("get metadata failed").len()),
                 );
-                let _ = db_set(local_sizedb, path, res.unwrap());
+                let _ = db_set::<LocalSizeDBItem>(local_sizedb, path, res.unwrap().into());
             }
             res.unwrap()
         };
