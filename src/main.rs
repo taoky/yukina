@@ -172,7 +172,8 @@ struct NormalizedFileStats {
     size: u64,
     exists_local: bool,
 }
-type NormalizedVote = Vec<(String, NormalizedFileStats)>;
+type NormalizedVoteItem = (String, NormalizedFileStats);
+type NormalizedVote = Vec<NormalizedVoteItem>;
 
 fn normalize_vote(vote_value: &VoteValue, size: u64) -> f64 {
     let vote_count = vote_value.count;
@@ -249,7 +250,12 @@ where
     }
 }
 
-fn remove_file(args: &Cli, path: &str, local_db: Option<&sled::Db>) -> Result<(), std::io::Error> {
+fn remove_file(
+    args: &Cli,
+    item: &NormalizedVoteItem,
+    local_db: Option<&sled::Db>,
+) -> Result<(), std::io::Error> {
+    let path = &item.0;
     let full_path = args.repo_path.join(path);
     if args.dry_run {
         tracing::info!("Would remove: {:?}", full_path);
@@ -260,7 +266,7 @@ fn remove_file(args: &Cli, path: &str, local_db: Option<&sled::Db>) -> Result<()
         return Err(e);
     }
 
-    tracing::info!("Removed: {:?}", full_path);
+    tracing::info!("Removed: {:?} (score = {})", full_path, item.1.score);
     if let Err(e) = db_remove(local_db, path) {
         tracing::warn!("Remove from local db failed: {:?}", e);
     }
@@ -279,13 +285,18 @@ async fn head_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<re
 }
 
 /// Returns actual size of the file. When used with dry_run, returns 0.
-async fn download_file(args: &Cli, path: &str, client: &reqwest::Client) -> Result<usize> {
+async fn download_file(
+    args: &Cli,
+    item: &NormalizedVoteItem,
+    client: &reqwest::Client,
+) -> Result<usize> {
+    let path = &item.0;
     let url = construct_url(args, path);
     if args.dry_run {
         tracing::info!("Would download: {} -> {:?}", url, args.repo_path.join(path));
         return Ok(0);
     }
-    tracing::info!("Downloading {}", url);
+    tracing::info!("Downloading {} (score = {})", url, item.1.score);
     async fn download(
         args: &Cli,
         path: &str,
@@ -363,8 +374,7 @@ fn open_db(path: Option<&PathBuf>) -> Option<sled::Db> {
     }
 }
 
-fn get_hit_rate(hit: usize, miss: usize) -> f64
-{
+fn get_hit_rate(hit: usize, miss: usize) -> f64 {
     assert!(hit + miss > 0);
     hit as f64 / (hit + miss) as f64 * 100.0
 }

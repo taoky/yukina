@@ -454,7 +454,7 @@ pub async fn stage4(
         let local_item = to_remove_queue
             .pop()
             .expect("Nothing to remove while size exceeds");
-        if let Err(e) = remove_file(args, &local_item.0, local_sizedb) {
+        if let Err(e) = remove_file(args, &local_item, local_sizedb) {
             // We tend to stop immediately if deletion error occurs, as it means that the total size of the repo could not be reduced.
             tracing::error!("Stopping due to error: {}", e);
             return Err(Stage4Error::LocalRemoveError(e));
@@ -475,8 +475,8 @@ pub async fn stage4(
     }
 
     macro_rules! download {
-        ($remote_path: expr, $remote_size: expr) => {
-            let download_state = download_file(args, &$remote_path, client).await;
+        ($remote_item: expr, $remote_size: expr) => {
+            let download_state = download_file(args, &$remote_item, client).await;
             match download_state {
                 Ok(actual_size) => {
                     if args.dry_run {
@@ -492,7 +492,7 @@ pub async fn stage4(
                         }
                         let _ = db_set::<LocalSizeDBItem>(
                             local_sizedb,
-                            &$remote_path,
+                            &$remote_item.0,
                             actual_size.into(),
                         );
                     }
@@ -509,9 +509,8 @@ pub async fn stage4(
         // does size fit?
         let remote_score = item.1.score;
         let remote_size = item.1.size;
-        let remote_path = item.0.clone();
         if sum.checked_add(remote_size).unwrap() <= max {
-            download!(remote_path, remote_size);
+            download!(item, remote_size);
         } else if sum <= max {
             // well, we have to remove something, or stop the process
             let mut stop_flag = false;
@@ -533,7 +532,7 @@ pub async fn stage4(
                     stop_flag = true;
                     break;
                 }
-                if let Err(e) = remove_file(args, &local_item.0, local_sizedb) {
+                if let Err(e) = remove_file(args, &local_item, local_sizedb) {
                     tracing::error!("Stopping due to error: {}", e);
                     return Err(Stage4Error::LocalRemoveError(e));
                 }
@@ -542,7 +541,7 @@ pub async fn stage4(
             if stop_flag {
                 break;
             }
-            download!(remote_path, remote_size);
+            download!(item, remote_size);
         } else {
             unreachable!("sum > max");
         }
