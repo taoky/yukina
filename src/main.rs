@@ -9,7 +9,7 @@ use regex::Regex;
 use std::{collections::HashMap, io::Write, net::IpAddr, path::PathBuf};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use yukina::{db_set, RemoteSizeDBItem};
+use yukina::{db_remove, db_set, RemoteSizeDBItem};
 
 use shadow_rs::shadow;
 shadow!(build);
@@ -251,28 +251,21 @@ where
 
 fn remove_file(args: &Cli, path: &str, local_db: Option<&sled::Db>) -> Result<(), std::io::Error> {
     let full_path = args.repo_path.join(path);
-    if full_path.exists() {
-        if args.dry_run {
-            tracing::info!("Would remove: {:?}", full_path);
-        } else if let Err(e) = std::fs::remove_file(&full_path) {
-            tracing::warn!("Remove file failed: {:?}", e);
-            return Err(e);
-        } else {
-            tracing::info!("Removed: {:?}", full_path);
-            if let Some(db) = local_db {
-                if let Err(e) = db.remove(path) {
-                    tracing::warn!("Remove from local db failed: {:?}", e);
-                }
-            }
-        }
-
-        Ok(())
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("File not found: {:?}", full_path),
-        ))
+    if args.dry_run {
+        tracing::info!("Would remove: {:?}", full_path);
+        return Ok(());
     }
+    if let Err(e) = std::fs::remove_file(&full_path) {
+        tracing::warn!("Remove file failed: {:?}", e);
+        return Err(e);
+    }
+
+    tracing::info!("Removed: {:?}", full_path);
+    if let Err(e) = db_remove(local_db, path) {
+        tracing::warn!("Remove from local db failed: {:?}", e);
+    }
+
+    Ok(())
 }
 
 async fn head_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<reqwest::Response> {

@@ -50,3 +50,10 @@ where
     }
     Ok(())
 }
+
+pub fn db_remove(db: Option<&sled::Db>, key: &str) -> anyhow::Result<()> {
+    if let Some(db) = db {
+        db.remove(key)?;
+    }
+    Ok(())
+}
