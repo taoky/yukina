@@ -156,7 +156,7 @@ pub fn stage1(args: &Cli) -> UserVote {
         humansize::format_size(total_size, humansize::BINARY)
     );
     tracing::info!(
-        "(From nginx log) Hit: {}, Miss: {}, Hit rate: {:.2}%",
+        "(From nginx log) Hit: {}, Miss: {}, Estimated Hit rate: {:.2}%",
         hit,
         miss,
         hit as f64 / (hit + miss) as f64 * 100.0
@@ -232,6 +232,8 @@ pub async fn stage3(
     let mut sizedb_nonexist = 0;
     let mut remote_hit = 0;
     let mut remote_miss = 0;
+    let mut local_hit_with_vote = 0;
+    let mut real_miss_with_vote = 0;
 
     for vote_item in vote {
         progressbar.inc(1);
@@ -240,6 +242,7 @@ pub async fn stage3(
         let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
             tracing::debug!("File exists: {} ({})", url_path, value);
             local_hit += 1;
+            local_hit_with_vote += vote_value.count;
             (*value, true, true)
         } else {
             // if size_db, require sled first
@@ -275,6 +278,7 @@ pub async fn stage3(
                             size
                         );
                         sizedb_hit += 1;
+                        real_miss_with_vote += vote_value.count;
                         (size, false, true)
                     }
                     None => {
@@ -307,6 +311,7 @@ pub async fn stage3(
                             size
                         );
                         remote_hit += 1;
+                        real_miss_with_vote += vote_value.count;
                         insert_remotedb(remote_sizedb, url_path, Some(size));
                         (size, false, true)
                     }
@@ -345,6 +350,12 @@ pub async fn stage3(
         sizedb_nonexist,
         remote_hit,
         remote_miss
+    );
+    tracing::info!(
+        "Local hit with vote: {}, Real miss with vote: {}, Hit rate: {:.2}%",
+        local_hit_with_vote,
+        real_miss_with_vote,
+        local_hit_with_vote as f64 / (local_hit_with_vote + real_miss_with_vote) as f64 * 100.0
     );
     res
 }
