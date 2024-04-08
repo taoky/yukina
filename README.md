@@ -93,6 +93,8 @@ Options:
           Size database Miss TTL [default: 2d]
       --filesize-limit <FILESIZE_LIMIT>
           Single file size limit, files larger than this will NOT be counted/downloaded [default: 4g]
+      --min-vote-count <MIN_VOTE_COUNT>
+          Minimum vote count to consider a file in stage 1 [default: 2]
       --retry <RETRY>
           Retry count for each request [default: 3]
   -h, --help
@@ -119,6 +121,6 @@ Options:
 
 ## Naming
 
-"Yukina" means "YUKI-based Next-generation Async-cache"...OK, you might not find that very convincing, neither do I. Actually, this name comes from [Yukina Minato](https://en.wikipedia.org/wiki/List_of_BanG_Dream!_characters#Yukina_Minato), the vocalist of Roselia from *BanG Dream!* series.
+"Yukina" means "YUKI-based Next-generation Async-cache"... OK, you might not find that very convincing, neither do I. Actually, this name comes from [Yukina Minato](https://en.wikipedia.org/wiki/List_of_BanG_Dream!_characters#Yukina_Minato), the vocalist of Roselia from *BanG Dream!* series.
 
 And [yuki](https://github.com/ustclug/yuki) is a mirror management tool used inhouse in USTC mirrors (another choice besides [tunasync](https://github.com/tuna/tunasync), try it if you need!). This program actually does not require yuki (yuki examples are given for your convenience), but I just want to make a pun.

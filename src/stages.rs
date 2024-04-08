@@ -144,8 +144,8 @@ pub fn stage1(args: &Cli) -> UserVote {
         }
     }
 
-    // Get sorted vote "report". Items with only one vote would be ignored.
-    let mut vote: Vec<_> = vote.into_iter().filter(|(_, v)| v.count != 1).collect();
+    // Get sorted vote "report". Items with votes less than given minimum would be ignored.
+    let mut vote: Vec<_> = vote.into_iter().filter(|(_, v)| v.count >= args.min_vote_count).collect();
     vote.sort_by_key(|(_, size)| *size);
     vote.reverse();
 
