@@ -9,10 +9,10 @@ use std::{
 use yukina::{db_get, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
-    combined, construct_url, deduce_log_file_type, download_file, get_ip_prefix_string, head_file,
-    insert_remotedb, matches_filter, normalize_vote, progressbar, relative_uri_normalize,
-    remove_file, Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote, UserVote,
-    VoteValue,
+    combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
+    get_ip_prefix_string, head_file, insert_remotedb, matches_filter, normalize_vote, progressbar,
+    relative_uri_normalize, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
+    NormalizedVote, UserVote, VoteValue,
 };
 
 /// Analyse nginx logs and get user votes
@@ -29,12 +29,13 @@ pub fn stage1(args: &Cli) -> UserVote {
         })
         .collect();
     entries.sort_by_cached_key(|entry| {
-        entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .unwrap_or(SystemTime::UNIX_EPOCH)
+        std::cmp::Reverse(
+            entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH),
+        )
     });
-    entries.reverse();
 
     tracing::debug!("Entries: {:?}", entries);
 
@@ -65,6 +66,7 @@ pub fn stage1(args: &Cli) -> UserVote {
         }
         let filename = entry.file_name();
         let filename = filename.to_str().unwrap();
+        tracing::info!("Processing {}", filename);
         // decide whether directly read the file, or use a decompressor
         let filetype = deduce_log_file_type(filename);
         let bufreader: BufReader<Box<dyn std::io::Read>> = match filetype {
@@ -149,8 +151,7 @@ pub fn stage1(args: &Cli) -> UserVote {
         .into_iter()
         .filter(|(_, v)| v.count >= args.min_vote_count)
         .collect();
-    vote.sort_by_key(|(_, size)| *size);
-    vote.reverse();
+    vote.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
 
     let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
     tracing::info!(
@@ -162,7 +163,7 @@ pub fn stage1(args: &Cli) -> UserVote {
         "(From nginx log) Hit: {}, Miss: {}, Estimated Hit rate: {:.2}%",
         hit,
         miss,
-        hit as f64 / (hit + miss) as f64 * 100.0
+        get_hit_rate(hit, miss)
     );
 
     vote
@@ -206,8 +207,7 @@ pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
         };
         res.push((path.to_string(), filesize));
     }
-    res.sort_by_key(|(_, size)| *size);
-    res.reverse();
+    res.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
 
     let total_size = res.iter().map(|(_, size)| *size).sum::<u64>();
     tracing::info!(
@@ -376,9 +376,7 @@ pub async fn stage3(
         "Local hit with vote: {}, Real miss with vote: {}, Hit rate: {:.2}%",
         hit_stats.local_hit_with_vote,
         hit_stats.real_miss_with_vote,
-        hit_stats.local_hit_with_vote as f64
-            / (hit_stats.local_hit_with_vote + hit_stats.real_miss_with_vote) as f64
-            * 100.0
+        get_hit_rate(hit_stats.local_hit_with_vote, hit_stats.real_miss_with_vote)
     );
     res
 }
