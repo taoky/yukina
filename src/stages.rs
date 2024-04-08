@@ -145,7 +145,10 @@ pub fn stage1(args: &Cli) -> UserVote {
     }
 
     // Get sorted vote "report". Items with votes less than given minimum would be ignored.
-    let mut vote: Vec<_> = vote.into_iter().filter(|(_, v)| v.count >= args.min_vote_count).collect();
+    let mut vote: Vec<_> = vote
+        .into_iter()
+        .filter(|(_, v)| v.count >= args.min_vote_count)
+        .collect();
     vote.sort_by_key(|(_, size)| *size);
     vote.reverse();
 
@@ -227,13 +230,31 @@ pub async fn stage3(
     let mut res = Vec::new();
     let progressbar = progressbar!(Some(vote.len() as u64));
     // Stats counters
-    let mut local_hit = 0;
-    let mut sizedb_hit = 0;
-    let mut sizedb_nonexist = 0;
-    let mut remote_hit = 0;
-    let mut remote_miss = 0;
-    let mut local_hit_with_vote = 0;
-    let mut real_miss_with_vote = 0;
+    #[derive(Debug, Default)]
+    struct HitMissStats {
+        /// File exists locally
+        local_hit: usize,
+        /// File does not exist locally, but exists in sizedb
+        sizedb_hit: usize,
+        /// File does not exist locally, and sizedb shows that it does not exist remotely
+        sizedb_nonexist: usize,
+        /// File does not exist locally and in sizedb, but exists remotely
+        remote_hit: usize,
+        /// File does not exist locally and in sizedb, and does not exist remotely
+        remote_miss: usize,
+        /// For files exist locally or remotely, the sum of success_count
+        local_hit_with_vote: usize,
+        /// For files exist locally or remotely, the sum of reject_count
+        real_miss_with_vote: usize,
+    }
+
+    impl HitMissStats {
+        fn update_with_vote(&mut self, vote_value: &VoteValue) {
+            self.local_hit_with_vote += vote_value.success_count as usize;
+            self.real_miss_with_vote += vote_value.reject_count as usize;
+        }
+    }
+    let mut hit_stats = HitMissStats::default();
 
     for vote_item in vote {
         progressbar.inc(1);
@@ -241,8 +262,8 @@ pub async fn stage3(
         // Check if it exists
         let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
             tracing::debug!("File exists: {} ({})", url_path, value);
-            local_hit += 1;
-            local_hit_with_vote += vote_value.count;
+            hit_stats.local_hit += 1;
+            hit_stats.update_with_vote(vote_value);
             (*value, true, true)
         } else {
             // if size_db, require sled first
@@ -277,13 +298,13 @@ pub async fn stage3(
                             url_path,
                             size
                         );
-                        sizedb_hit += 1;
-                        real_miss_with_vote += vote_value.count;
+                        hit_stats.sizedb_hit += 1;
+                        hit_stats.update_with_vote(vote_value);
                         (size, false, true)
                     }
                     None => {
                         tracing::info!("File not found at remote (from sizedb): {}", url_path);
-                        sizedb_nonexist += 1;
+                        hit_stats.sizedb_nonexist += 1;
                         (0, false, false)
                     }
                 }
@@ -310,8 +331,8 @@ pub async fn stage3(
                             url_path,
                             size
                         );
-                        remote_hit += 1;
-                        real_miss_with_vote += vote_value.count;
+                        hit_stats.remote_hit += 1;
+                        hit_stats.update_with_vote(vote_value);
                         insert_remotedb(remote_sizedb, url_path, Some(size));
                         (size, false, true)
                     }
@@ -321,7 +342,7 @@ pub async fn stage3(
                         if is_404 {
                             insert_remotedb(remote_sizedb, url_path, None);
                         }
-                        remote_miss += 1;
+                        hit_stats.remote_miss += 1;
                         (0, false, false)
                     }
                 }
@@ -345,17 +366,19 @@ pub async fn stage3(
     progressbar.finish();
     tracing::info!(
         "Local hit: {}, SizeDB hit: {}, SizeDB 404: {}, Remote hit: {}, Remote miss: {}",
-        local_hit,
-        sizedb_hit,
-        sizedb_nonexist,
-        remote_hit,
-        remote_miss
+        hit_stats.local_hit,
+        hit_stats.sizedb_hit,
+        hit_stats.sizedb_nonexist,
+        hit_stats.remote_hit,
+        hit_stats.remote_miss
     );
     tracing::info!(
         "Local hit with vote: {}, Real miss with vote: {}, Hit rate: {:.2}%",
-        local_hit_with_vote,
-        real_miss_with_vote,
-        local_hit_with_vote as f64 / (local_hit_with_vote + real_miss_with_vote) as f64 * 100.0
+        hit_stats.local_hit_with_vote,
+        hit_stats.real_miss_with_vote,
+        hit_stats.local_hit_with_vote as f64
+            / (hit_stats.local_hit_with_vote + hit_stats.real_miss_with_vote) as f64
+            * 100.0
     );
     res
 }
