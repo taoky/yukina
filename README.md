@@ -94,7 +94,7 @@ Options:
       --filesize-limit <FILESIZE_LIMIT>
           Single file size limit, files larger than this will NOT be counted/downloaded [default: 4g]
       --min-vote-count <MIN_VOTE_COUNT>
-          Minimum vote count to consider a file in stage 1 [default: 2]
+          Minimum vote count to consider a file as a candicate [default: 2]
       --retry <RETRY>
           Retry count for each request [default: 3]
   -h, --help

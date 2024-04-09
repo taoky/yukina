@@ -89,7 +89,7 @@ struct Cli {
     #[clap(long, value_parser = parse_bytes, default_value = "4g")]
     filesize_limit: u64,
 
-    /// Minimum vote count to consider a file in stage 1.
+    /// Minimum vote count to consider a file as a candicate.
     #[clap(long, default_value_t = 2)]
     min_vote_count: u64,
 

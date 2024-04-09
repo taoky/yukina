@@ -146,11 +146,8 @@ pub fn stage1(args: &Cli) -> UserVote {
         }
     }
 
-    // Get sorted vote "report". Items with votes less than given minimum would be ignored.
-    let mut vote: Vec<_> = vote
-        .into_iter()
-        .filter(|(_, v)| v.count >= args.min_vote_count)
-        .collect();
+    // Get sorted vote "report".
+    let mut vote: Vec<_> = vote.into_iter().collect();
     vote.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
 
     let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
@@ -266,6 +263,12 @@ pub async fn stage3(
             hit_stats.update_with_vote(vote_value);
             (*value, true, true)
         } else {
+            // if vote count less than min_vote_count, count in stats and skip
+            if vote_value.count < args.min_vote_count {
+                // don't really try to get size, to simplify logic and save some network requests
+                hit_stats.update_with_vote(vote_value);
+                continue;
+            }
             // if size_db, require sled first
             let mut size_item: Option<RemoteSizeDBItem> = None;
             let mut exceeded_miss_ttl = false;
