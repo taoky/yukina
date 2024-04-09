@@ -69,6 +69,8 @@ pub fn stage1(args: &Cli) -> UserVote {
         tracing::info!("Processing {}", filename);
         // decide whether directly read the file, or use a decompressor
         let filetype = deduce_log_file_type(filename);
+
+        let mut child_process = None;
         let bufreader: BufReader<Box<dyn std::io::Read>> = match filetype {
             LogFileType::Plain => {
                 let file = std::fs::File::open(entry.path()).expect("open file failed");
@@ -86,7 +88,9 @@ pub fn stage1(args: &Cli) -> UserVote {
                     .stdout(std::process::Stdio::piped())
                     .spawn()
                     .expect("spawn decompressor failed");
-                std::io::BufReader::new(Box::new(output.stdout.expect("get stdout failed")))
+                child_process = Some(output);
+                let stdout = child_process.as_mut().unwrap().stdout.take().expect("get stdout failed");
+                std::io::BufReader::new(Box::new(stdout))
             }
         };
 
@@ -143,6 +147,11 @@ pub fn stage1(args: &Cli) -> UserVote {
             }
             vote.resp_size = vote.resp_size.max(item.size);
             access_record.insert(ip_prefix_url, item.time.into());
+        }
+
+        // Reap child processes, if any
+        if let Some(mut child) = child_process {
+            let _ = child.wait();
         }
     }
 
