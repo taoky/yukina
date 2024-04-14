@@ -3,6 +3,8 @@ use clap::ValueEnum;
 use std::path::PathBuf;
 
 use crate::{Cli, NormalizedVoteItem};
+
+use self::nix_channels::NixChannels;
 pub trait Extension {
     fn name(&self) -> &'static str;
     fn parse(
@@ -23,7 +25,7 @@ pub enum ExtensionType {
 impl ExtensionType {
     pub fn build(&self) -> Box<dyn Extension> {
         match self {
-            ExtensionType::NixChannels => Box::new(nix_channels::NixChannels),
+            ExtensionType::NixChannels => Box::<NixChannels>::default(),
         }
     }
 }

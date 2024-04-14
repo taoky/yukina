@@ -487,44 +487,57 @@ pub async fn stage4(
         };
     }
 
+    // Extension might bring duplicated items...
+    // Use a HashSet to store paths we've seen (downloaded)
+    let mut seen = HashSet::new();
     macro_rules! download {
         ($remote_item: expr, $remote_size: expr) => {
-            let download_state = download_file(args, &$remote_item, client).await;
-            match download_state {
-                Ok(actual_size) => {
-                    if args.dry_run {
-                        sum += $remote_size;
-                    } else {
-                        sum += actual_size as u64;
-                        if ($remote_size as u64) != actual_size as u64 {
-                            tracing::warn!(
-                                "Size mismatch: {} (remote) vs {} (actual)",
-                                $remote_size,
-                                actual_size
+            if seen.insert($remote_item.path.clone()) {
+                let download_state = download_file(args, &$remote_item, client).await;
+                match download_state {
+                    Ok(actual_size) => {
+                        if args.dry_run {
+                            sum += $remote_size;
+                        } else {
+                            sum += actual_size as u64;
+                            if ($remote_size as u64) != actual_size as u64 {
+                                tracing::warn!(
+                                    "Size mismatch: {} (remote) vs {} (actual)",
+                                    $remote_size,
+                                    actual_size
+                                );
+                            }
+                            let _ = db_set::<LocalSizeDBItem>(
+                                local_sizedb,
+                                &$remote_item.path,
+                                actual_size.into(),
                             );
                         }
-                        let _ = db_set::<LocalSizeDBItem>(
-                            local_sizedb,
-                            &$remote_item.path,
-                            actual_size.into(),
-                        );
-                    }
-                    // Run extension and push to download queue
-                    if let Some(ext) = &extension {
-                        if let Ok(res) = ext.parse(args, &$remote_item, client) {
-                            if let Some(new_item) = res {
-                                let new_item = new_item.clone();
-                                tracing::info!("Extension {} result: {:?}", ext.name(), new_item);
-                                to_download_queue.push(new_item);
+                        // Run extension and push to download queue
+                        if let Some(ext) = &extension {
+                            if let Ok(res) = ext.parse(args, &$remote_item, client) {
+                                if let Some(new_item) = res {
+                                    let new_item = new_item.clone();
+                                    tracing::info!(
+                                        "Extension {} result: {:?}",
+                                        ext.name(),
+                                        new_item
+                                    );
+                                    to_download_queue.push(new_item);
+                                }
+                            } else {
+                                tracing::warn!(
+                                    "Extension {} error: {:?}",
+                                    ext.name(),
+                                    $remote_item
+                                );
                             }
-                        } else {
-                            tracing::warn!("Extension error: {:?}", $remote_item);
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::error!("Download error: {}", e);
-                    increase_error_threshold!(download_error_cnt);
+                    Err(e) => {
+                        tracing::error!("Download error: {}", e);
+                        increase_error_threshold!(download_error_cnt);
+                    }
                 }
             }
         };
