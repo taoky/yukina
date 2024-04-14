@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use core::fmt;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BinaryHeap, HashMap, HashSet},
     io::{BufRead, BufReader},
     time::SystemTime,
 };
@@ -12,7 +12,7 @@ use crate::{
     combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
     get_ip_prefix_string, head_file, insert_remotedb, matches_filter, normalize_vote, progressbar,
     relative_uri_normalize, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
-    NormalizedVote, UserVote, VoteValue,
+    NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
 };
 
 /// Analyse nginx logs and get user votes
@@ -89,7 +89,12 @@ pub fn stage1(args: &Cli) -> UserVote {
                     .spawn()
                     .expect("spawn decompressor failed");
                 child_process = Some(output);
-                let stdout = child_process.as_mut().unwrap().stdout.take().expect("get stdout failed");
+                let stdout = child_process
+                    .as_mut()
+                    .unwrap()
+                    .stdout
+                    .take()
+                    .expect("get stdout failed");
                 std::io::BufReader::new(Box::new(stdout))
             }
         };
@@ -365,14 +370,15 @@ pub async fn stage3(
                 tracing::warn!("File too large: {} ({})", url_path, size);
                 continue;
             }
-            res.push((
-                url_path.clone(),
-                NormalizedFileStats {
-                    score: normalize_vote(vote_value, size),
+            res.push(NormalizedVoteItem {
+                path: url_path.clone(),
+                stats: NormalizedFileStats {
+                    score: normalize_vote(vote_value.count, size),
+                    original_score: vote_value.count,
                     size,
                     exists_local: exists,
                 },
-            ));
+            });
         }
     }
     progressbar.finish();
@@ -418,60 +424,55 @@ pub async fn stage4(
     client: &reqwest::Client,
     local_sizedb: Option<&sled::Db>,
 ) -> Result<(), Stage4Error> {
+    let extension = args.extension.as_ref().map(|x| x.build());
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
     let max = args.size_limit;
 
-    // Two "queues". We take items from tail.
-    let mut to_download_queue: Vec<_> = normalized_vote
+    // Two "queues"
+    // Max heap: take largest first
+    let mut to_download_queue: BinaryHeap<_> = normalized_vote
         .iter()
-        .filter(|x| !x.1.exists_local)
-        .collect();
-    // sorted score small -> large, filesize large -> small (taking large score first)
-    to_download_queue.sort_by(|a, b| match a.1.score.partial_cmp(&b.1.score).unwrap() {
-        std::cmp::Ordering::Equal => b.1.size.cmp(&a.1.size),
-        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-    });
-    let mut to_remove_queue: Vec<_> = normalized_vote
-        .iter()
-        .filter(|x| x.1.exists_local)
+        .filter(|x| !x.stats.exists_local)
         .cloned()
+        .collect();
+    // Min heap: take smallest first
+    let mut to_remove_queue: BinaryHeap<_> = normalized_vote
+        .iter()
+        .filter(|x| x.stats.exists_local)
+        .cloned()
+        .map(std::cmp::Reverse)
         .collect();
     // for files get no votes, add to to_remove_queue with 0 score
     {
-        let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|x| x.0.clone()).collect();
+        let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|x| x.0.path.clone()).collect();
         for item in stats.list.clone() {
             if !to_remove_hs.contains(&item.0) {
-                to_remove_queue.push((
-                    item.0,
-                    NormalizedFileStats {
+                to_remove_queue.push(std::cmp::Reverse(NormalizedVoteItem {
+                    path: item.0,
+                    stats: NormalizedFileStats {
                         score: 0.0,
+                        original_score: 0,
                         size: item.1,
                         exists_local: true,
                     },
-                ));
+                }));
             }
         }
     }
-    // sorted score large -> small, filesize large -> small (taking small score first)
-    to_remove_queue.sort_by(|a, b| match b.1.score.partial_cmp(&a.1.score).unwrap() {
-        std::cmp::Ordering::Equal => a.1.size.cmp(&b.1.size),
-        std::cmp::Ordering::Greater => std::cmp::Ordering::Greater,
-        std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-    });
 
     while sum > max {
         // well, it's too large even don't get anything
         // just remove!
         let local_item = to_remove_queue
             .pop()
-            .expect("Nothing to remove while size exceeds");
+            .expect("Nothing to remove while size exceeds")
+            .0;
         if let Err(e) = remove_file(args, &local_item, local_sizedb) {
             // We tend to stop immediately if deletion error occurs, as it means that the total size of the repo could not be reduced.
             tracing::error!("Stopping due to error: {}", e);
             return Err(Stage4Error::LocalRemoveError(e));
         }
-        sum -= local_item.1.size;
+        sum -= local_item.stats.size;
     }
 
     // Here, a download error counter is maintained: network is more likely to be unstable, so we're not going to stop the process immediately.
@@ -504,9 +505,21 @@ pub async fn stage4(
                         }
                         let _ = db_set::<LocalSizeDBItem>(
                             local_sizedb,
-                            &$remote_item.0,
+                            &$remote_item.path,
                             actual_size.into(),
                         );
+                    }
+                    // Run extension and push to download queue
+                    if let Some(ext) = &extension {
+                        if let Ok(res) = ext.parse(args, &$remote_item, client) {
+                            if let Some(new_item) = res {
+                                let new_item = new_item.clone();
+                                tracing::info!("Extension {} result: {:?}", ext.name(), new_item);
+                                to_download_queue.push(new_item);
+                            }
+                        } else {
+                            tracing::warn!("Extension error: {:?}", $remote_item);
+                        }
                     }
                 }
                 Err(e) => {
@@ -519,8 +532,8 @@ pub async fn stage4(
 
     while let Some(item) = to_download_queue.pop() {
         // does size fit?
-        let remote_score = item.1.score;
-        let remote_size = item.1.size;
+        let remote_score = item.stats.score;
+        let remote_size = item.stats.size;
         if sum.checked_add(remote_size).unwrap() <= max {
             download!(item, remote_size);
         } else if sum <= max {
@@ -535,10 +548,11 @@ pub async fn stage4(
                         continue;
                     }
                     Some(l) => l,
-                };
+                }
+                .0;
                 // Compare score, if the file to download is even less popular than local one, stop.
-                let local_size = local_item.1.size;
-                let local_score = local_item.1.score;
+                let local_size = local_item.stats.size;
+                let local_score = local_item.stats.score;
                 if local_score >= remote_score {
                     tracing::info!("Stopped downloading/removing.");
                     stop_flag = true;

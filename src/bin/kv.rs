@@ -22,7 +22,7 @@ enum Type {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]  // Item is only used when printing with debug
+#[allow(dead_code)] // Item is only used when printing with debug
 enum TypeResult {
     Remote(RemoteSizeDBItem),
     Local(LocalSizeDBItem),

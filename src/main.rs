@@ -15,6 +15,7 @@ use shadow_rs::shadow;
 shadow!(build);
 
 mod combined;
+mod extension;
 mod stages;
 mod term;
 
@@ -96,6 +97,10 @@ struct Cli {
     /// Retry count for each request.
     #[clap(long, default_value_t = 3)]
     retry: usize,
+
+    /// Extension for specific repo types
+    #[clap(long, value_enum)]
+    extension: Option<extension::ExtensionType>,
 }
 
 const DOWNLOAD_ERROR_THRESHOLD: usize = 5;
@@ -169,14 +174,46 @@ type UserVote = Vec<(String, VoteValue)>;
 #[derive(Debug, Copy, Clone)]
 struct NormalizedFileStats {
     score: f64,
+    original_score: u64,
     size: u64,
     exists_local: bool,
 }
-type NormalizedVoteItem = (String, NormalizedFileStats);
+
+#[derive(Debug, Clone)]
+struct NormalizedVoteItem {
+    path: String,
+    stats: NormalizedFileStats,
+}
 type NormalizedVote = Vec<NormalizedVoteItem>;
 
-fn normalize_vote(vote_value: &VoteValue, size: u64) -> f64 {
-    let vote_count = vote_value.count;
+impl PartialEq for NormalizedVoteItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.stats.score == other.stats.score && self.stats.size == other.stats.size
+    }
+}
+
+impl Eq for NormalizedVoteItem {}
+
+impl PartialOrd for NormalizedVoteItem {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NormalizedVoteItem {
+    /// Greater -> More priority
+    /// Larger score -> More priority
+    /// Eq score, smaller size -> More priority
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.stats.score == other.stats.score {
+            other.stats.size.cmp(&self.stats.size)
+        } else {
+            self.stats.score.partial_cmp(&other.stats.score).unwrap()
+        }
+    }
+}
+
+fn normalize_vote(vote_count: u64, size: u64) -> f64 {
     let size = size.max(2 * 1024 * 1024 * 1024);
     vote_count as f64 / (size.checked_add(1).expect("+1 overflow") as f64 / 1024.0 / 1024.0)
 }
@@ -255,7 +292,7 @@ fn remove_file(
     item: &NormalizedVoteItem,
     local_db: Option<&sled::Db>,
 ) -> Result<(), std::io::Error> {
-    let path = &item.0;
+    let path = &item.path;
     let full_path = args.repo_path.join(path);
     if args.dry_run {
         tracing::info!("Would remove: {:?}", full_path);
@@ -266,7 +303,7 @@ fn remove_file(
         return Err(e);
     }
 
-    tracing::info!("Removed: {:?} (score = {})", full_path, item.1.score);
+    tracing::info!("Removed: {:?} (score = {})", full_path, item.stats.score);
     if let Err(e) = db_remove(local_db, path) {
         tracing::warn!("Remove from local db failed: {:?}", e);
     }
@@ -290,13 +327,17 @@ async fn download_file(
     item: &NormalizedVoteItem,
     client: &reqwest::Client,
 ) -> Result<usize> {
-    let path = &item.0;
+    if item.stats.exists_local {
+        tracing::warn!("item is marked as exists_local, skipping download");
+        return Ok(item.stats.size as usize);
+    }
+    let path = &item.path;
     let url = construct_url(args, path);
     if args.dry_run {
         tracing::info!("Would download: {} -> {:?}", url, args.repo_path.join(path));
         return Ok(0);
     }
-    tracing::info!("Downloading {} (score = {})", url, item.1.score);
+    tracing::info!("Downloading {} (score = {})", url, item.stats.score);
     async fn download(
         args: &Cli,
         path: &str,
