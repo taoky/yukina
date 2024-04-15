@@ -587,3 +587,53 @@ pub async fn stage4(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_binaryheap_order_correct() {
+        let v1 = NormalizedVoteItem {
+            path: "a".to_string(),
+            stats: NormalizedFileStats {
+                score: 1.0,
+                original_score: 1,
+                size: 1,
+                exists_local: false,
+            },
+        };
+        let v2 = NormalizedVoteItem {
+            path: "b".to_string(),
+            stats: NormalizedFileStats {
+                score: 2.0,
+                original_score: 2,
+                size: 2,
+                exists_local: false,
+            },
+        };
+        let v3 = NormalizedVoteItem {
+            path: "c".to_string(),
+            stats: NormalizedFileStats {
+                score: 2.0,
+                original_score: 2,
+                size: 3,
+                exists_local: false,
+            },
+        };
+        let mut b1 = BinaryHeap::new();
+        b1.push(v1.clone());
+        b1.push(v2.clone());
+        b1.push(v3.clone());
+        assert_eq!(b1.pop().unwrap().path, "b");
+        assert_eq!(b1.pop().unwrap().path, "c");
+        assert_eq!(b1.pop().unwrap().path, "a");
+        let mut b2 = BinaryHeap::new();
+        b2.push(std::cmp::Reverse(v1));
+        b2.push(std::cmp::Reverse(v2));
+        b2.push(std::cmp::Reverse(v3));
+        assert_eq!(b2.pop().unwrap().0.path, "a");
+        assert_eq!(b2.pop().unwrap().0.path, "c");
+        assert_eq!(b2.pop().unwrap().0.path, "b");
+    }
+}
