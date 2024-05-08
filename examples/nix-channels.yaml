@@ -5,7 +5,7 @@ envs:
   YUKINA_EXTRA: --strip-prefix /store
   UPSTREAM: https://cache.nixos.org/
 cron: 50 1/4 * * *
-logRotCycle: 10
+logRotCycle: 50
 name: nix-channels
 storageDir: /srv/repo/nix-channels/store
 volumes:

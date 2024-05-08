@@ -1,0 +1,199 @@
+result.log.41.gz
+10:2024-05-01T09:50:12.380687Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 253858, Miss: 100451, Estimated Hit rate: 71.65%
+9612:2024-05-01T09:57:47.364671Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 253858, Real miss with vote: 71498, Hit rate: 78.02%
+
+result.log.23.gz
+10:2024-05-04T09:50:10.269419Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 228581, Miss: 100146, Estimated Hit rate: 69.54%
+9243:2024-05-04T09:54:29.080650Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 228581, Real miss with vote: 72564, Hit rate: 75.90%
+
+result.log.39.gz
+10:2024-05-01T17:50:12.142132Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 259643, Miss: 99878, Estimated Hit rate: 72.22%
+9237:2024-05-01T17:54:56.268212Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 259643, Real miss with vote: 70889, Hit rate: 78.55%
+
+result.log.29.gz
+10:2024-05-03T09:50:12.926865Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 233333, Miss: 93293, Estimated Hit rate: 71.44%
+9252:2024-05-03T09:56:02.765206Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 233333, Real miss with vote: 65677, Hit rate: 78.04%
+
+result.log.33.gz
+10:2024-05-02T17:50:10.014071Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 261234, Miss: 97880, Estimated Hit rate: 72.74%
+9562:2024-05-02T17:53:51.442871Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 261234, Real miss with vote: 68479, Hit rate: 79.23%
+
+result.log.35.gz
+10:2024-05-02T09:50:12.430803Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 266628, Miss: 100651, Estimated Hit rate: 72.60%
+9106:2024-05-02T09:55:01.824165Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 266628, Real miss with vote: 71997, Hit rate: 78.74%
+
+result.log.26.gz
+10:2024-05-03T21:50:15.447151Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 220268, Miss: 91753, Estimated Hit rate: 70.59%
+9037:2024-05-03T21:55:25.691420Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 220268, Real miss with vote: 64629, Hit rate: 77.31%
+
+result.log.25.gz
+10:2024-05-04T01:50:10.875355Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 226409, Miss: 93574, Estimated Hit rate: 70.76%
+10002:2024-05-04T02:09:30.221140Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 226409, Real miss with vote: 65882, Hit rate: 77.46%
+
+result.log.36.gz
+10:2024-05-02T05:50:11.837294Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 270248, Miss: 99179, Estimated Hit rate: 73.15%
+9017:2024-05-02T05:55:56.496088Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 270248, Real miss with vote: 70645, Hit rate: 79.28%
+
+result.log.24.gz
+10:2024-05-04T05:50:10.980374Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 229271, Miss: 94846, Estimated Hit rate: 70.74%
+9303:2024-05-04T05:55:41.424669Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 229271, Real miss with vote: 67094, Hit rate: 77.36%
+
+result.log.13.gz
+10:2024-05-06T01:50:14.139625Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 252407, Miss: 149925, Estimated Hit rate: 62.74%
+11379:2024-05-06T01:53:22.390480Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 252407, Real miss with vote: 116630, Hit rate: 68.40%
+
+result.log.44.gz
+10:2024-04-30T21:50:16.459850Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 265825, Miss: 102631, Estimated Hit rate: 72.15%
+10054:2024-04-30T21:58:05.590962Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 265825, Real miss with vote: 73470, Hit rate: 78.35%
+
+result.log.48.gz
+10:2024-04-30T05:50:13.889315Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 254996, Miss: 98872, Estimated Hit rate: 72.06%
+9585:2024-04-30T05:57:57.112419Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 254996, Real miss with vote: 73088, Hit rate: 77.72%
+
+result.log.49.gz
+10:2024-04-30T01:50:16.271914Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 261682, Miss: 102979, Estimated Hit rate: 71.76%
+10381:2024-04-30T01:55:24.821869Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 261682, Real miss with vote: 75413, Hit rate: 77.63%
+
+result.log.17.gz
+10:2024-05-05T09:50:13.096509Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 250767, Miss: 138357, Estimated Hit rate: 64.44%
+11452:2024-05-05T09:59:56.046633Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 250767, Real miss with vote: 105628, Hit rate: 70.36%
+
+result.log.5.gz
+11:2024-05-07T17:50:12.187800Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 315740, Miss: 164929, Estimated Hit rate: 65.69%
+19151:2024-05-07T17:59:43.127920Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 315740, Real miss with vote: 113165, Hit rate: 73.62%
+
+result.log.16.gz
+10:2024-05-05T13:50:13.031765Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 253185, Miss: 146408, Estimated Hit rate: 63.36%
+11530:2024-05-05T13:59:57.798504Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 253185, Real miss with vote: 112792, Hit rate: 69.18%
+
+result.log.43.gz
+10:2024-05-01T01:50:11.534017Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 265606, Miss: 102816, Estimated Hit rate: 72.09%
+9869:2024-05-01T01:51:35.243945Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 265606, Real miss with vote: 73546, Hit rate: 78.31%
+
+result.log.19.gz
+10:2024-05-05T01:50:12.934922Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 232342, Miss: 106313, Estimated Hit rate: 68.61%
+10532:2024-05-05T01:57:14.399575Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 232342, Real miss with vote: 75198, Hit rate: 75.55%
+
+result.log.0
+11:2024-05-08T17:50:16.915664Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 368250, Miss: 178781, Estimated Hit rate: 67.32%
+20950:2024-05-08T18:03:11.220726Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 368250, Real miss with vote: 122796, Hit rate: 74.99%
+
+result.log.10.gz
+10:2024-05-06T21:50:19.081412Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 316595, Miss: 165180, Estimated Hit rate: 65.71%
+19286:2024-05-06T21:58:47.081309Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 316595, Real miss with vote: 114609, Hit rate: 73.42%
+
+result.log.42.gz
+10:2024-05-01T05:50:12.799001Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 259613, Miss: 103336, Estimated Hit rate: 71.53%
+10295:2024-05-01T05:58:16.548580Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 259613, Real miss with vote: 73265, Hit rate: 77.99%
+
+result.log.6.gz
+10:2024-05-07T13:50:13.327496Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 308721, Miss: 165936, Estimated Hit rate: 65.04%
+18686:2024-05-07T13:55:38.113384Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 308721, Real miss with vote: 115107, Hit rate: 72.84%
+
+result.log.8.gz
+10:2024-05-07T05:50:14.045318Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 321713, Miss: 168171, Estimated Hit rate: 65.67%
+19580:2024-05-07T06:04:57.294273Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 321713, Real miss with vote: 116874, Hit rate: 73.35%
+
+result.log.30.gz
+10:2024-05-03T05:50:09.668557Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 246919, Miss: 92978, Estimated Hit rate: 72.65%
+9163:2024-05-03T05:52:25.232042Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 246919, Real miss with vote: 64969, Hit rate: 79.17%
+
+result.log.3.gz
+11:2024-05-08T01:50:19.541496Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 319827, Miss: 163935, Estimated Hit rate: 66.11%
+18417:2024-05-08T01:56:09.915673Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 319827, Real miss with vote: 116213, Hit rate: 73.35%
+
+result.log.20.gz
+10:2024-05-04T21:50:14.859700Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 231675, Miss: 104522, Estimated Hit rate: 68.91%
+10027:2024-05-04T21:56:06.794462Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 231675, Real miss with vote: 74623, Hit rate: 75.64%
+
+result.log.28.gz
+10:2024-05-03T13:50:11.545617Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 222968, Miss: 92215, Estimated Hit rate: 70.74%
+9131:2024-05-03T13:58:16.089855Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 222968, Real miss with vote: 64991, Hit rate: 77.43%
+
+result.log.2.gz
+11:2024-05-08T05:50:14.930107Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 331954, Miss: 166319, Estimated Hit rate: 66.62%
+18979:2024-05-08T06:00:32.658369Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 331954, Real miss with vote: 117509, Hit rate: 73.86%
+
+result.log.31.gz
+10:2024-05-03T01:50:11.100279Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 258350, Miss: 94477, Estimated Hit rate: 73.22%
+9379:2024-05-03T01:55:59.492995Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 258350, Real miss with vote: 66452, Hit rate: 79.54%
+
+result.log.27.gz
+10:2024-05-03T17:50:10.847235Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 219862, Miss: 92570, Estimated Hit rate: 70.37%
+8881:2024-05-03T17:52:23.145096Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 219862, Real miss with vote: 65591, Hit rate: 77.02%
+
+result.log.45.gz
+10:2024-04-30T17:50:13.466677Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 271652, Miss: 99450, Estimated Hit rate: 73.20%
+9727:2024-04-30T18:04:25.366519Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 271652, Real miss with vote: 74810, Hit rate: 78.41%
+
+result.log.47.gz
+10:2024-04-30T09:50:13.302523Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 273657, Miss: 98690, Estimated Hit rate: 73.50%
+9465:2024-04-30T09:55:55.379778Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 273657, Real miss with vote: 73186, Hit rate: 78.90%
+
+result.log.18.gz
+10:2024-05-05T05:50:12.490444Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 236002, Miss: 134506, Estimated Hit rate: 63.70%
+11727:2024-05-05T06:02:01.837826Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 236002, Real miss with vote: 101630, Hit rate: 69.90%
+
+result.log.4.gz
+11:2024-05-07T21:50:20.551896Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 318788, Miss: 164389, Estimated Hit rate: 65.98%
+18695:2024-05-07T22:00:09.207828Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 318788, Real miss with vote: 115889, Hit rate: 73.34%
+
+result.log.14.gz
+10:2024-05-05T21:50:19.812120Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 240778, Miss: 144667, Estimated Hit rate: 62.47%
+11453:2024-05-05T21:57:30.001697Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 240778, Real miss with vote: 111479, Hit rate: 68.35%
+
+result.log.46.gz
+10:2024-04-30T13:50:11.650651Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 271140, Miss: 99041, Estimated Hit rate: 73.25%
+9969:2024-04-30T13:59:56.020311Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 271140, Real miss with vote: 73666, Hit rate: 78.64%
+
+result.log.38.gz
+10:2024-05-01T21:50:11.797432Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 270041, Miss: 99819, Estimated Hit rate: 73.01%
+9987:2024-05-01T22:09:31.456874Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 270041, Real miss with vote: 70954, Hit rate: 79.19%
+
+result.log.7.gz
+10:2024-05-07T09:50:14.371855Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 319077, Miss: 169778, Estimated Hit rate: 65.27%
+19119:2024-05-07T09:57:54.097760Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 319077, Real miss with vote: 118330, Hit rate: 72.95%
+
+result.log.40.gz
+10:2024-05-01T13:50:11.628056Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 264585, Miss: 100431, Estimated Hit rate: 72.49%
+9454:2024-05-01T13:53:45.687866Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 264585, Real miss with vote: 71096, Hit rate: 78.82%
+
+result.log.32.gz
+10:2024-05-02T21:50:10.682190Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 258154, Miss: 94489, Estimated Hit rate: 73.21%
+9281:2024-05-02T21:54:04.527025Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 258154, Real miss with vote: 66408, Hit rate: 79.54%
+
+result.log.22.gz
+10:2024-05-04T13:50:11.489739Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 227595, Miss: 101451, Estimated Hit rate: 69.17%
+9889:2024-05-04T13:58:18.318023Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 227595, Real miss with vote: 72889, Hit rate: 75.74%
+
+result.log.37.gz
+10:2024-05-02T01:50:10.744332Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 276444, Miss: 100170, Estimated Hit rate: 73.40%
+8998:2024-05-02T01:53:15.299724Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 276444, Real miss with vote: 71498, Hit rate: 79.45%
+
+result.log.34.gz
+10:2024-05-02T13:50:12.647134Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 272772, Miss: 100306, Estimated Hit rate: 73.11%
+9995:2024-05-02T14:01:00.116923Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 272772, Real miss with vote: 70274, Hit rate: 79.51%
+
+result.log.21.gz
+10:2024-05-04T17:50:13.036314Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 231632, Miss: 103497, Estimated Hit rate: 69.12%
+10208:2024-05-04T18:01:51.761351Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 231632, Real miss with vote: 74343, Hit rate: 75.70%
+
+result.log.11.gz
+10:2024-05-06T17:50:17.725162Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 312009, Miss: 165048, Estimated Hit rate: 65.40%
+24086:2024-05-06T19:16:23.176236Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 312009, Real miss with vote: 114398, Hit rate: 73.17%
+
+result.log.12.gz
+10:2024-05-06T05:50:11.977295Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 264883, Miss: 155148, Estimated Hit rate: 63.06%
+12841:2024-05-06T06:17:56.901303Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 264883, Real miss with vote: 121362, Hit rate: 68.58%
+
+result.log.15.gz
+10:2024-05-05T17:50:11.525923Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 243138, Miss: 145759, Estimated Hit rate: 62.52%
+11485:2024-05-05T17:55:57.766208Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 243138, Real miss with vote: 112012, Hit rate: 68.46%
+
+result.log.9.gz
+10:2024-05-07T01:50:16.688914Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 317525, Miss: 166938, Estimated Hit rate: 65.54%
+18971:2024-05-07T01:53:07.537670Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 317525, Real miss with vote: 115901, Hit rate: 73.26%
+
+result.log.1.gz
+11:2024-05-08T13:50:29.693717Z  INFO ThreadId(01) yukina::stages: (From nginx log) Hit: 348815, Miss: 174082, Estimated Hit rate: 66.71%
+20649:2024-05-08T14:23:20.529536Z  INFO ThreadId(01) yukina::stages: Local hit with vote: 348815, Real miss with vote: 120934, Hit rate: 74.26%

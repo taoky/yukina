@@ -119,6 +119,10 @@ Options:
   -h, --help  Print help
 ```
 
+## Does it Work Well in Practice?
+
+See [stats](stats/).
+
 ## Naming
 
 "Yukina" means "YUKI-based Next-generation Async-cache"... OK, you might not find that very convincing, neither do I. Actually, this name comes from [Yukina Minato](https://en.wikipedia.org/wiki/List_of_BanG_Dream!_characters#Yukina_Minato), the vocalist of Roselia from *BanG Dream!* series.
