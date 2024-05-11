@@ -347,6 +347,12 @@ async fn download_file(
         let resp = client.get(url).send().await?.error_for_status()?;
         let total_size = resp.content_length();
         let progressbar = progressbar!(total_size);
+        progressbar.set_style(
+            indicatif::ProgressStyle::default_bar()
+                .template("{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
         progressbar.set_message(format!("Downloading: {}", url));
 
         // Try to get mtime from response headers
