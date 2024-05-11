@@ -2,7 +2,7 @@ image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
   YUKINA_FILTER: --filter narinfo$ --filter nar.xz$
-  YUKINA_EXTRA: --strip-prefix /store
+  YUKINA_EXTRA: --strip-prefix /store --extension nix-channels
   UPSTREAM: https://cache.nixos.org/
 cron: 50 1/4 * * *
 logRotCycle: 50
