@@ -97,11 +97,17 @@ Options:
           Minimum vote count to consider a file as a candicate [default: 2]
       --retry <RETRY>
           Retry count for each request [default: 3]
+      --extension <EXTENSION>
+          Extension for specific repo types [possible values: nix-channels]
   -h, --help
           Print help
   -V, --version
           Print version
 ```
+
+"Extension" is a special option for specific repo types:
+
+- nix-channels: This extension would parse narinfo file and add the blob urls to the download list.
 
 `kv` is a very simple wrapper around `sled` (same as the version yukina uses). KV tool:
 
