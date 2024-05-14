@@ -137,4 +137,4 @@ And [yuki](https://github.com/ustclug/yuki) is a mirror management tool used inh
 
 ## Acknowledgements
 
-I would like to give special thanks to [SeanChao/mirror-cache](https://github.com/SeanChao/mirror-cache), which is also sponsored in OSPP 2021. Though this project is finally not used by us, it has "forced" me to rethink the design of a repoistory caching system, and I have learned a lot from it. If you need a more general-purpose cache, you might want to try it.
+I would like to give special thanks to [SeanChao/mirror-cache](https://github.com/SeanChao/mirror-cache), which is sponsored in OSPP 2021. Though this project is finally not used by us, it has "forced" me to rethink the design of a repoistory caching system, and I have learned a lot from it. If you need a more general-purpose cache, you might want to try it.
