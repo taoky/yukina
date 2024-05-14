@@ -134,3 +134,7 @@ See [stats](stats/).
 "Yukina" means "YUKI-based Next-generation Async-cache"... OK, you might not find that very convincing, neither do I. Actually, this name comes from [Yukina Minato](https://en.wikipedia.org/wiki/List_of_BanG_Dream!_characters#Yukina_Minato), the vocalist of Roselia from *BanG Dream!* series.
 
 And [yuki](https://github.com/ustclug/yuki) is a mirror management tool used inhouse in USTC mirrors (another choice besides [tunasync](https://github.com/tuna/tunasync), try it if you need!). This program actually does not require yuki (yuki examples are given for your convenience), but I just want to make a pun.
+
+## Acknowledgements
+
+I would like to give special thanks to [SeanChao/mirror-cache](https://github.com/SeanChao/mirror-cache), which is also sponsored in OSPP 2021. Though this project is finally not used by us, it has "forced" me to rethink the design of a repoistory caching system, and I have learned a lot from it. If you need a more general-purpose cache, you might want to try it.
