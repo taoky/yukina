@@ -9,4 +9,10 @@ Without special note, all data below are from sync log running on mirrors.ustc.e
 
 Size limit: 512g.
 
-![Nix-channels-1](nix-channels-20240409-1.png)
+![Nix-channels-20240409-1](nix-channels-20240409-1.png)
+
+## Nix-channels, build tag 20240511
+
+Size limit: 512g.
+
+![Nix-channels-20240511-1](nix-channels-20240511-1.png)

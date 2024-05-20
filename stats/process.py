@@ -28,7 +28,7 @@ plt.ylabel('Percentage')
 plt.xticks(rotation=45)
 
 # Change following line
-plt.title('Yukina Hit Rate Over Time (nix-channels, tag 20240409)')
+plt.title('Yukina Hit Rate Over Time (nix-channels, tag 20240511)')
 
 plt.tight_layout()
 plt.savefig('tmp.png')
