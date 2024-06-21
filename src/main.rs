@@ -150,10 +150,17 @@ fn matches_filter(url: &str, filter: &[Regex]) -> bool {
     false
 }
 
-fn relative_uri_normalize(uri: &str) -> String {
-    assert!(uri.starts_with('/'));
-    let mut url =
-        Url::parse(&format!("http://example.com{}", uri)).expect("unexpected url parse failed");
+fn log_uri_normalize(uri: &str) -> Result<String> {
+    let mut url = {
+        if uri.starts_with("http:") || uri.starts_with("https:") {
+            Url::parse(uri)?
+        } else {
+            if !uri.starts_with('/') {
+                return Err(anyhow::anyhow!("relative uri should start with /: {}", uri));
+            }
+            Url::parse(&format!("http://example.com{}", uri))?
+        }
+    };
     url.set_query(None);
     url.set_fragment(None);
     let mut path = url.path().to_string();
@@ -165,7 +172,7 @@ fn relative_uri_normalize(uri: &str) -> String {
         }
         path = new_path;
     }
-    path
+    Ok(path)
 }
 
 /// URL in UserVote shall not start with `/`: it is relative to the repo root.
@@ -349,7 +356,9 @@ async fn download_file(
         let progressbar = progressbar!(total_size);
         progressbar.set_style(
             indicatif::ProgressStyle::default_bar()
-                .template("{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+                .template(
+                    "{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
+                )
                 .unwrap()
                 .progress_chars("#>-"),
         );
@@ -504,11 +513,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_relative_uri_normalize() {
+    fn test_log_uri_normalize() {
         assert_eq!(
-            relative_uri_normalize("/test/a/../test?aaa=bbb&ccc=ddd#aaaaa"),
+            log_uri_normalize("/test/a/../test?aaa=bbb&ccc=ddd#aaaaa").unwrap(),
             "/test/test"
         );
-        assert_eq!(relative_uri_normalize("/test////abc"), "/test/abc")
+        assert_eq!(log_uri_normalize("/test////abc").unwrap(), "/test/abc");
+        assert_eq!(log_uri_normalize("http://mirrors.ustc.edu.cn/nix-channels/store/kvnv3yfhwdvmmci261m092llmrwkw2rr.narinfo").unwrap(), "/nix-channels/store/kvnv3yfhwdvmmci261m092llmrwkw2rr.narinfo");
     }
 }

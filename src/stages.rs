@@ -10,8 +10,8 @@ use yukina::{db_get, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
     combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
-    get_ip_prefix_string, head_file, insert_remotedb, matches_filter, normalize_vote, progressbar,
-    relative_uri_normalize, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
+    get_ip_prefix_string, head_file, insert_remotedb, log_uri_normalize, matches_filter,
+    normalize_vote, progressbar, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
     NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
 };
 
@@ -102,7 +102,14 @@ pub fn stage1(args: &Cli) -> UserVote {
         for line in bufreader.lines() {
             let line = line.expect("read line failed");
             let item = combined_parser.parse(&line).expect("parse line failed");
-            let path = relative_uri_normalize(&item.url);
+            let path = log_uri_normalize(&item.url);
+            let path = match path {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("Invalid path: {}, with err {}", item.url, e);
+                    continue;
+                }
+            };
             let duration = now_utc.signed_duration_since(item.time);
             if duration.num_hours() > 24 * 7 {
                 stop_iterate_flag = true;
