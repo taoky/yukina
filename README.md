@@ -4,7 +4,7 @@ YUKI-based Next-generation Async-cache
 
 ## Approach (Simplified)
 
-1. Get nginx log for 7 days, filter out all interesting requests, collect their "popularity"
+1. Get nginx log for some days (7 days by default), filter out all interesting requests, collect their "popularity"
 2. Get local interesting files metadata
 3. Remove files that are not "popular", try to get new files while under the limit
 
@@ -75,6 +75,8 @@ Options:
           Directory of repo
       --dry-run
           Don't really download or remove anything, just show what would be done. (HEAD requests are still sent.)
+      --log-duration <LOG_DURATION>
+          Log items to check. Access log beyond log_duration would be ignored [default: 7d]
       --user-agent <USER_AGENT>
           User agent to use [default: "yukina (https://github.com/taoky/yukina)"]
       --size-limit <SIZE_LIMIT>
@@ -99,6 +101,8 @@ Options:
           Retry count for each request [default: 3]
       --extension <EXTENSION>
           Extension for specific repo types [possible values: nix-channels]
+      --aggressive-removal
+          Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold
   -h, --help
           Print help
   -V, --version

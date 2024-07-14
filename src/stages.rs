@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet},
@@ -111,7 +111,7 @@ pub fn stage1(args: &Cli) -> UserVote {
                 }
             };
             let duration = now_utc.signed_duration_since(item.time);
-            if duration.num_hours() > 24 * 7 {
+            if duration > TimeDelta::from_std(*args.log_duration).unwrap() {
                 stop_iterate_flag = true;
                 continue;
             }
@@ -464,6 +464,29 @@ pub async fn stage4(
                     },
                 }));
             }
+        }
+    }
+
+    if args.aggressive_removal {
+        loop {
+            let local_item = match to_remove_queue.peek() {
+                None => break,
+                Some(item) => item,
+            };
+            // check if score is 0.0
+            if local_item.0.stats.score != 0.0 {
+                break;
+            }
+            // pop it out first
+            let local_item = to_remove_queue
+                .pop()
+                .expect("unexpected pop failure when peek succeeds")
+                .0;
+            if let Err(e) = remove_file(args, &local_item, local_sizedb) {
+                tracing::error!("Stopping due to error: {}", e);
+                return Err(Stage4Error::LocalRemoveError(e));
+            }
+            sum -= local_item.stats.size;
         }
     }
 

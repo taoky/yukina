@@ -54,6 +54,10 @@ struct Cli {
     #[clap(long)]
     dry_run: bool,
 
+    /// Log items to check. Access log beyond log_duration would be ignored
+    #[clap(long, default_value = "7d")]
+    log_duration: humantime::Duration,
+
     /// User agent to use
     #[clap(long, default_value = "yukina (https://github.com/taoky/yukina)")]
     user_agent: String,
@@ -101,6 +105,10 @@ struct Cli {
     /// Extension for specific repo types
     #[clap(long, value_enum)]
     extension: Option<extension::ExtensionType>,
+
+    /// Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold.
+    #[clap(long)]
+    aggressive_removal: bool,
 }
 
 const DOWNLOAD_ERROR_THRESHOLD: usize = 5;

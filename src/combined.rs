@@ -14,6 +14,7 @@ pub struct LogItem {
     pub url: String,
     pub size: u64,
     pub status: u16,
+    #[allow(dead_code)]
     pub user_agent: String,
 }
 
