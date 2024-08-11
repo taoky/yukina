@@ -18,15 +18,70 @@ YUKI-based Next-generation Async-cache
 An example, assuming that access_log is in default combined format:
 
 ```nginx
-location /pypi/ {
+location /pypi/web/ {
+    rewrite ^/pypi/web/(.*)$ /pypi/$1 permanent;
+}
+
+location ~ ^/pypi/simple/[^/]*([A-Z]|_)[^/]* {
+    # local package_name = ngx.var.uri:match("/pypi/simple/(.+)")
+    # if package_name then
+    #     -- Normalize the package name per PEP 503
+    #     local normalized = package_name:gsub("[-_.]+", "-"):lower()
+    #     return ngx.redirect("/pypi/simple/" .. normalized, ngx.HTTP_MOVED_TEMPORARILY)
+    # end
+    rewrite_by_lua_file /etc/nginx/lua/pypi_normalize.lua;
+}
+
+location ~ ^/pypi/[^/]*([A-Z]|_)[^/]*/json {
+    # local package_name = ngx.var.uri:match("/pypi/(.+)/json")
+    # if package_name then
+    #     -- Normalize the package name per PEP 503
+    #     local normalized = package_name:gsub("[-_.]+", "-"):lower()
+    #     return ngx.redirect("/pypi/" .. normalized .. "/json", ngx.HTTP_MOVED_TEMPORARILY)
+    # end
+    rewrite_by_lua_file /etc/nginx/lua/pypi_normalize.lua;
+}
+
+location ~ ^/pypi/[^/]+/json$ {
+    access_log /var/log/nginx/cacheproxy/pypi.log;
+    rewrite ^/pypi/([^/]+)/json$ /pypi/json/$1 break;
+    types { }
+    default_type "application/json; charset=utf-8";
+}
+
+location ~ ^/pypi/simple {
+    access_log /var/log/nginx/cacheproxy/pypi.log;
+    # conf.d/pypi.conf:
+    # map $http_accept $pypi_mirror_suffix {
+    #     default ".html";
+    #     "~*application/vnd\.pypi\.simple\.v1\+json" ".v1_json";
+    #     "~*application/vnd\.pypi\.simple\.v1\+html" ".v1_html";
+    #     "~*text/html" ".html";
+    # }
+
+    index index$pypi_mirror_suffix index.html;
+    types {
+        application/vnd.pypi.simple.v1+json v1_json;
+        application/vnd.pypi.simple.v1+html v1_html;
+        text/html html;
+    }
+    default_type "text/html";
+    try_files $uri$pypi_mirror_suffix $uri $uri/ @pypi_302;
+}
+
+location /pypi/packages/ {
     access_log /var/log/nginx/cacheproxy/pypi.log;
     try_files $uri $uri/ @pypi_302;
+}
+
+location /pypi/json/ {
+    autoindex off;
 }
 
 location @pypi_302 {
     access_log /var/log/nginx/cacheproxy/pypi.log;
     # -> $scheme://mirrors.example.com/pypi/...
-    return 302 $scheme://mirrors.example.com$request_uri;
+    rewrite ^/pypi/(.*)$ $scheme://mirrors.example.com/pypi/web/$1 redirect;
 }
 
 location /anaconda/ {

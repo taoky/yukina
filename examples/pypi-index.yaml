@@ -1,0 +1,8 @@
+image: ustcmirror/shadowmire:latest
+envs:
+  INDEX_ONLY: true
+  UPSTREAM: https://nanomirrors.tuna.tsinghua.edu.cn/pypi/web/
+cron: 15 12 * * *
+logRotCycle: 10
+name: pypi-index
+storageDir: /srv/repo/pypi/
