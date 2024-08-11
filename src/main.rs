@@ -6,7 +6,8 @@ use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
-use std::{collections::HashMap, io::Write, net::IpAddr, path::PathBuf};
+use std::{collections::HashMap, fs::create_dir_all, io::Write, net::IpAddr, path::PathBuf};
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use yukina::{db_remove, db_set, RemoteSizeDBItem};
@@ -385,6 +386,11 @@ async fn download_file(
         let mtime = get_response_mtime(&resp);
 
         let tmp_path = args.repo_path.join(format!("{}.tmp", path));
+        // Make sure tmp_path has parent folder created
+        let tmp_parent = tmp_path.parent().unwrap();
+        if let Err(e) = create_dir_all(tmp_parent) {
+            warn!("create dir {:?} failed with {}", tmp_parent, e);
+        }
         {
             let mut dest_file = std::fs::File::create(&tmp_path)?;
             let mut stream = resp.bytes_stream();
