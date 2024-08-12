@@ -1,7 +1,7 @@
 image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
-  YUKINA_FILTER: --filter ^/pypi/packages/../../
+  YUKINA_FILTER: --filter ^/pypi/packages/../../.+/.+
   YUKINA_EXTRA: --strip-prefix /packages
   UPSTREAM: https://nanomirrors.tuna.tsinghua.edu.cn/pypi/web/packages/
 cron: 20 2/4 * * *
