@@ -22,7 +22,7 @@ location /pypi/web/ {
     rewrite ^/pypi/web/(.*)$ /pypi/$1 permanent;
 }
 
-location ~ ^/pypi/simple/[^/]*([A-Z]|_)[^/]* {
+location ~ ^/pypi/simple/[^/]*([A-Z]|_|\.)[^/]* {
     # local package_name = ngx.var.uri:match("/pypi/simple/(.+)")
     # if package_name then
     #     -- Normalize the package name per PEP 503
@@ -32,7 +32,7 @@ location ~ ^/pypi/simple/[^/]*([A-Z]|_)[^/]* {
     rewrite_by_lua_file /etc/nginx/lua/pypi_normalize.lua;
 }
 
-location ~ ^/pypi/[^/]*([A-Z]|_)[^/]*/json {
+location ~ ^/pypi/[^/]*([A-Z]|_|\.)[^/]*/json {
     # local package_name = ngx.var.uri:match("/pypi/(.+)/json")
     # if package_name then
     #     -- Normalize the package name per PEP 503
