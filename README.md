@@ -24,7 +24,7 @@ location /pypi/web/ {
 
 location ~ ^/pypi/simple/[^/]*([A-Z]|_|\.)[^/]* {
     # local package_name = ngx.var.uri:match("/pypi/simple/(.+)")
-    # if package_name then
+    # if package_name and package_name ~= "index.html" then
     #     -- Normalize the package name per PEP 503
     #     local normalized = package_name:gsub("[-_.]+", "-"):lower()
     #     return ngx.redirect("/pypi/simple/" .. normalized, ngx.HTTP_MOVED_TEMPORARILY)
