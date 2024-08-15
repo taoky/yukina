@@ -110,6 +110,10 @@ struct Cli {
     /// Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold.
     #[clap(long)]
     aggressive_removal: bool,
+
+    /// Don't download anything, just remove unpopular files.
+    #[clap(long)]
+    gc_only: bool,
 }
 
 const DOWNLOAD_ERROR_THRESHOLD: usize = 5;

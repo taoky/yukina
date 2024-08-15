@@ -333,6 +333,10 @@ pub async fn stage3(
                     }
                 }
             } else {
+                if args.gc_only {
+                    // Don't do remote requests even if file does not exist, when gc_only is on.
+                    continue;
+                }
                 let url = construct_url(args, url_path);
                 tracing::debug!("Heading {:?}", url);
                 let res = head_file(args, url.as_str(), client)
@@ -503,6 +507,11 @@ pub async fn stage4(
             return Err(Stage4Error::LocalRemoveError(e));
         }
         sum -= local_item.stats.size;
+    }
+
+    if args.gc_only {
+        // OK, we don't need to download anything in this case.
+        return Ok(());
     }
 
     // Here, a download error counter is maintained: network is more likely to be unstable, so we're not going to stop the process immediately.

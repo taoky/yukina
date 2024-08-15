@@ -158,6 +158,8 @@ Options:
           Extension for specific repo types [possible values: nix-channels]
       --aggressive-removal
           Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold
+      --gc-only
+          Don't download anything, just remove unpopular files
   -h, --help
           Print help
   -V, --version
