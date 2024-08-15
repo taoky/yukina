@@ -66,7 +66,8 @@ location ~ ^/pypi/simple {
         text/html html;
     }
     default_type "text/html";
-    try_files $uri$pypi_mirror_suffix $uri $uri/ @pypi_302;
+    # try_files $uri$pypi_mirror_suffix $uri $uri/ @pypi_302;
+    try_files $uri$pypi_mirror_suffix $uri $uri/ =404;
 }
 
 location /pypi/packages/ {
