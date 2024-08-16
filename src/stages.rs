@@ -115,9 +115,6 @@ pub fn stage1(args: &Cli) -> UserVote {
                 stop_iterate_flag = true;
                 continue;
             }
-            if !matches_filter(&path, &args.filter) {
-                continue;
-            }
             let client_prefix = get_ip_prefix_string(item.client);
             let ip_prefix_url = IpPrefixUrl {
                 ip_prefix: client_prefix,
@@ -129,20 +126,33 @@ pub fn stage1(args: &Cli) -> UserVote {
                     continue;
                 }
             }
-            // strip prefix of the path
-            let mut path = path
-                .strip_prefix(&format!("/{}", args.name))
-                .unwrap_or_else(|| panic!("strip prefix failed: {}", path));
+            // strip prefix of the path, convert /reponame/some/path/xxx => /some/path/xxx
+            let mut path = match path.strip_prefix(&format!("/{}", args.name)) {
+                Some(p) => p,
+                None => {
+                    tracing::warn!("unexpected strip prefix (repo name) failed for path {}", path);
+                    continue;
+                }
+            };
+            // strip further to match repopath
             if let Some(prefix) = &args.strip_prefix {
-                path = path
-                    .strip_prefix(prefix)
-                    .expect("unexpected strip prefix failed");
+                path = match path.strip_prefix(prefix) {
+                    Some(p) => p,
+                    None => {
+                        tracing::warn!("unexpected strip prefix (user-given) failed for path {}", path);
+                        continue;
+                    }
+                };
             }
             // path shall not start with `/`
             if path.starts_with('/') {
                 path = path.strip_prefix('/').unwrap();
             }
             if path.is_empty() {
+                continue;
+            }
+            // path now looks like path/xxx
+            if !matches_filter(path, &args.filter) {
                 continue;
             }
             let vote = vote.entry(path.to_owned()).or_default();
@@ -203,11 +213,7 @@ pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
             .to_str()
             .expect("unexpected path conversion failed");
         // path shall not start with `/`.
-        let path = if path.starts_with('/') {
-            path.strip_prefix('/').unwrap()
-        } else {
-            path
-        };
+        assert!(!path.starts_with('/'));
         if !matches_filter(path, &args.filter) {
             continue;
         }

@@ -67,7 +67,7 @@ struct Cli {
     #[clap(long, value_parser = parse_bytes)]
     size_limit: u64,
 
-    /// Filter for urls and file paths you interested in (usually blobs of the repo)
+    /// Filter for urls and file paths you interested in (usually blobs of the repo). Relative to repo_path.
     #[clap(long, value_parser)]
     filter: Vec<Regex>,
 
@@ -75,7 +75,7 @@ struct Cli {
     #[clap(long)]
     url: Url,
 
-    /// Optional prefix to strip from the path after the repo name
+    /// Optional prefix to strip from the path after the repo name. Access URLs must match strip_prefix if set.
     #[clap(long)]
     strip_prefix: Option<String>,
 
@@ -352,6 +352,15 @@ async fn download_file(
         return Ok(item.stats.size as usize);
     }
     let path = &item.path;
+    // Precheck if file already exists
+    let filepath = args.repo_path.join(path);
+    if filepath.exists() {
+        tracing::warn!(
+            "File {:?} is requested to download but already exists locally. Not downloading.",
+            filepath
+        );
+        return Ok(filepath.metadata().unwrap().len() as usize);
+    }
     let url = construct_url(args, path);
     if args.dry_run {
         tracing::info!("Would download: {} -> {:?}", url, args.repo_path.join(path));
