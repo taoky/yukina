@@ -16,3 +16,9 @@ Size limit: 512g.
 Size limit: 512g.
 
 ![Nix-channels-20240511-1](nix-channels-20240511-1.png)
+
+## Pypi, build tag 20240811
+
+Size limit: 512g
+
+![Pypi-20240811-1](pypi-20240811-1.png)
