@@ -130,7 +130,10 @@ pub fn stage1(args: &Cli) -> UserVote {
             let mut path = match path.strip_prefix(&format!("/{}", args.name)) {
                 Some(p) => p,
                 None => {
-                    tracing::warn!("unexpected strip prefix (repo name) failed for path {}", path);
+                    tracing::warn!(
+                        "unexpected strip prefix (repo name) failed for path {}",
+                        path
+                    );
                     continue;
                 }
             };
@@ -139,7 +142,10 @@ pub fn stage1(args: &Cli) -> UserVote {
                 path = match path.strip_prefix(prefix) {
                     Some(p) => p,
                     None => {
-                        tracing::warn!("unexpected strip prefix (user-given) failed for path {}", path);
+                        tracing::debug!(
+                            "unexpected strip prefix (user-given) failed for path {}",
+                            path
+                        );
                         continue;
                     }
                 };
