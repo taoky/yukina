@@ -27,10 +27,14 @@ fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
 }
 
 fn get_version() -> &'static str {
-    if build::SHORT_COMMIT.is_empty() {
-        build::LAST_TAG
+    let tag = build::TAG;
+    let clean = build::GIT_CLEAN;
+    if !clean {
+        return Box::leak(format!("{} (dirty)", build::SHORT_COMMIT).into_boxed_str());
+    } else if tag.is_empty() {
+        return build::SHORT_COMMIT;
     } else {
-        build::SHORT_COMMIT
+        return tag;
     }
 }
 
