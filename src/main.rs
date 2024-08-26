@@ -26,13 +26,19 @@ fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
     parse_size(s).map_err(|e| clap::Error::raw(clap::error::ErrorKind::ValueValidation, e))
 }
 
+#[allow(clippy::const_is_empty)]
 fn get_version() -> &'static str {
     let tag = build::TAG;
     let clean = build::GIT_CLEAN;
+    let short_commit = build::SHORT_COMMIT;
     if !clean {
         return Box::leak(format!("{} (dirty)", build::SHORT_COMMIT).into_boxed_str());
     } else if tag.is_empty() {
-        return build::SHORT_COMMIT;
+        if short_commit.is_empty() {
+            return build::PKG_VERSION;
+        } else {
+            return short_commit;
+        }
     } else {
         return tag;
     }
