@@ -4,6 +4,8 @@ version = "0.20240827.0"
 edition = "2021"
 description = "YUKI-based Next-generation Async-cache"
 default-run = "yukina"
+license = "MIT"
+repository = "https://github.com/taoky/yukina"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
