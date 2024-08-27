@@ -85,7 +85,7 @@ location @pypi_302 {
     rewrite ^/pypi/(.*)$ $scheme://mirrors.example.com/pypi/web/$1 redirect;
 }
 
-location /anaconda/ {
+location /anaconda/cloud/ {
     access_log /var/log/nginx/cacheproxy/anaconda.log;
     try_files $uri $uri/ @anaconda_302;
 }
