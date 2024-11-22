@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, BufReader},
     time::SystemTime,
 };
-use yukina::{db_get, db_set, LocalSizeDBItem, RemoteSizeDBItem};
+use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
     combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
@@ -446,6 +446,7 @@ pub async fn stage4(
     stats: &FileStats,
     client: &reqwest::Client,
     local_sizedb: Option<&sled::Db>,
+    remote_sizedb: Option<&sled::Db>,
 ) -> Result<(), Stage4Error> {
     let extension = args.extension.as_ref().map(|x| x.build());
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
@@ -538,6 +539,15 @@ pub async fn stage4(
         };
     }
 
+    fn is_not_found(err: anyhow::Error) -> bool {
+        if let Some(reqwest_err) = err.downcast_ref::<reqwest::Error>() {
+            if reqwest_err.status() == Some(reqwest::StatusCode::NOT_FOUND) {
+                return true;
+            }
+        }
+        false
+    }
+
     // Extension might bring duplicated items...
     // Use a HashSet to store paths we've seen (downloaded)
     let mut seen = HashSet::new();
@@ -587,7 +597,17 @@ pub async fn stage4(
                     }
                     Err(e) => {
                         tracing::error!("Download error: {}", e);
-                        increase_error_threshold!(download_error_cnt);
+                        if is_not_found(e) {
+                            // Don't add to error count
+                            // Skip and clear remote hit in db
+                            tracing::info!(
+                                "Remove {} from remote sizedb as it does not exist.",
+                                $remote_item.path
+                            );
+                            let _ = db_remove(remote_sizedb, &$remote_item.path);
+                        } else {
+                            increase_error_threshold!(download_error_cnt);
+                        }
                     }
                 }
             }

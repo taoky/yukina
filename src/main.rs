@@ -525,6 +525,7 @@ async fn main() {
         &stats,
         &client,
         local_sizedb.as_ref(),
+        remote_sizedb.as_ref(),
     )
     .await;
     match result {
