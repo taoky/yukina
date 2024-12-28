@@ -1,0 +1,26 @@
+envs:
+  RSYNC_HOST: mirrors.tuna.tsinghua.edu.cn
+  RSYNC_PATH: anaconda/
+  RSYNC_DELETE_EXCLUDED: false
+  RSYNC_EXCLUDE: >
+    --include=/cloud/
+    --include=/cloud/conda-forge/
+    --include=/cloud/conda-forge/*/
+    --include=/cloud/conda-forge/*/repodata.json*
+    --exclude=/cloud/conda-forge/*/*
+    --include=/cloud/bioconda/
+    --include=/cloud/bioconda/*/
+    --include=/cloud/bioconda/*/repodata.json*
+    --exclude=/cloud/bioconda/*/*
+    --exclude=/cloud/*
+    --exclude=archive/Anaconda2* --exclude=miniconda/Miniconda2*
+    --exclude=archive/*s390x* --exclude=miniconda/*s390x*
+    --exclude=archive/*ppc64le* --exclude=miniconda/*ppc64le*
+    --exclude=archive/Anaconda-* --exclude=archive/Anaconda3-[1-5].* --exclude=archive/Anaconda3-201[8-9]* --exclude=archive/Anaconda3-202[0-2]* --exclude=miniconda/Miniconda-*
+    --exclude=pkgs/pro/ --exclude=pkgs/mro/
+    --exclude=pkgs/*/linux-ppc64le/
+image: ustcmirror/rsync:latest
+cron: 10 5/12 * * *
+logRotCycle: 10
+name: anaconda-main
+storageDir: /srv/repo/anaconda/
