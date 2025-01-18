@@ -8,7 +8,12 @@ use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
 use std::{
-    collections::HashMap, fs::create_dir_all, io::Write, net::IpAddr, path::PathBuf, sync::OnceLock,
+    collections::HashMap,
+    fs::create_dir_all,
+    io::Write,
+    net::IpAddr,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
 };
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
@@ -479,10 +484,17 @@ async fn main() {
         format!("info,{}", std::env::var("RUST_LOG").unwrap_or_default()),
     );
     let enable_color = std::env::var("NO_COLOR").is_err();
+    BAR_MANAGER.get_or_init(|| {
+        let manager = kyuri::Manager::new(std::time::Duration::from_secs(1));
+        manager.set_ticker(true);
+        manager
+    });
+    let bar_writer = BAR_MANAGER.get().unwrap().create_writer();
     tracing_subscriber::fmt()
         .with_thread_ids(true)
         .with_env_filter(EnvFilter::from_default_env())
         .with_ansi(enable_color)
+        .with_writer(Mutex::new(bar_writer))
         .init();
 
     // Print version info in debug mode
@@ -515,12 +527,6 @@ async fn main() {
 
     // change cwd
     std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
-
-    BAR_MANAGER.get_or_init(|| {
-        let manager = kyuri::Manager::new(std::time::Duration::from_secs(1));
-        manager.set_ticker(true);
-        manager
-    });
 
     let vote = stage1(&args);
     let stats = stage2(&args, local_sizedb.as_ref());
