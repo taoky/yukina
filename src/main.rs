@@ -516,7 +516,11 @@ async fn main() {
     // change cwd
     std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
 
-    BAR_MANAGER.get_or_init(|| kyuri::Manager::new(std::time::Duration::from_secs(1)));
+    BAR_MANAGER.get_or_init(|| {
+        let manager = kyuri::Manager::new(std::time::Duration::from_secs(1));
+        manager.set_ticker(true);
+        manager
+    });
 
     let vote = stage1(&args);
     let stats = stage2(&args, local_sizedb.as_ref());
