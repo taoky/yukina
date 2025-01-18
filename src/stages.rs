@@ -10,8 +10,8 @@ use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
     combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
-    get_ip_prefix_string, head_file, insert_remotedb, log_uri_normalize, matches_filter,
-    normalize_vote, progressbar, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
+    get_ip_prefix_string, get_progress_bar, head_file, insert_remotedb, log_uri_normalize,
+    matches_filter, normalize_vote, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
     NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
 };
 
@@ -258,7 +258,7 @@ pub async fn stage3(
     remote_sizedb: Option<&sled::Db>,
 ) -> NormalizedVote {
     let mut res = Vec::new();
-    let progressbar = progressbar!(Some(vote.len() as u64));
+    let progressbar = get_progress_bar(vote.len() as u64, "Stage 3", None);
     // Stats counters
     #[derive(Debug, Default)]
     struct HitMissStats {

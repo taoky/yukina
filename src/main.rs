@@ -1,12 +1,15 @@
 #![warn(clippy::cognitive_complexity)]
 use anyhow::Result;
+use bar::get_progress_bar;
 use chrono::Utc;
 use clap::Parser;
 use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
 use regex::Regex;
-use std::{collections::HashMap, fs::create_dir_all, io::Write, net::IpAddr, path::PathBuf};
+use std::{
+    collections::HashMap, fs::create_dir_all, io::Write, net::IpAddr, path::PathBuf, sync::OnceLock,
+};
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -15,10 +18,10 @@ use yukina::{db_remove, db_set, RemoteSizeDBItem};
 use shadow_rs::shadow;
 shadow!(build);
 
+mod bar;
 mod combined;
 mod extension;
 mod stages;
-mod term;
 
 use stages::*;
 
@@ -32,7 +35,7 @@ fn get_version() -> &'static str {
     let clean = build::GIT_CLEAN;
     let short_commit = build::SHORT_COMMIT;
     if !clean {
-        return Box::leak(format!("{} (dirty)", build::SHORT_COMMIT).into_boxed_str());
+        Box::leak(format!("{} (dirty)", build::SHORT_COMMIT).into_boxed_str())
     } else if tag.is_empty() {
         if short_commit.is_empty() {
             return build::PKG_VERSION;
@@ -385,16 +388,11 @@ async fn download_file(
     ) -> Result<usize> {
         let resp = client.get(url).send().await?.error_for_status()?;
         let total_size = resp.content_length();
-        let progressbar = progressbar!(total_size);
-        progressbar.set_style(
-            indicatif::ProgressStyle::default_bar()
-                .template(
-                    "{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-                )
-                .unwrap()
-                .progress_chars("#>-"),
+        let progressbar = get_progress_bar(
+            total_size.unwrap_or(0),
+            &format!("Downloading: {}", url),
+            Some("{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})"),
         );
-        progressbar.set_message(format!("Downloading: {}", url));
 
         // Try to get mtime from response headers
         fn get_response_mtime(resp: &reqwest::Response) -> Option<chrono::DateTime<Utc>> {
@@ -472,6 +470,8 @@ fn get_hit_rate(hit: usize, miss: usize) -> f64 {
     hit as f64 / (hit + miss) as f64 * 100.0
 }
 
+pub static BAR_MANAGER: OnceLock<kyuri::Manager> = OnceLock::new();
+
 #[tokio::main]
 async fn main() {
     std::env::set_var(
@@ -515,6 +515,8 @@ async fn main() {
 
     // change cwd
     std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
+
+    BAR_MANAGER.get_or_init(|| kyuri::Manager::new(std::time::Duration::from_secs(1)));
 
     let vote = stage1(&args);
     let stats = stage2(&args, local_sizedb.as_ref());
