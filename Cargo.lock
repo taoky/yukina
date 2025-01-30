@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "yukina"
-version = "0.20250119.0"
+version = "0.20250130.0"
 dependencies = [
  "anyhow",
  "bincode",
