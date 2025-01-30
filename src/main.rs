@@ -396,7 +396,7 @@ async fn download_file(
         let progressbar = get_progress_bar(
             total_size.unwrap_or(0),
             &format!("Downloading: {}", url),
-            Some("{msg}\n[{elapsed_precise}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})"),
+            Some("{msg}\n[{elapsed_precise}] {state_emoji} {bytes}/{total_bytes} ({bytes_per_sec}, {eta})"),
         );
 
         // Try to get mtime from response headers
@@ -436,7 +436,6 @@ async fn download_file(
         }
         let target_path = args.repo_path.join(path);
         std::fs::rename(&tmp_path, &target_path)?;
-        progressbar.finish();
         Ok(std::fs::metadata(&target_path)?.len() as usize)
     }
     match again(|| download(args, path, url.as_str(), client), args.retry).await {

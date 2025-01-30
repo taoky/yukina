@@ -4,7 +4,7 @@ pub fn get_progress_bar(len: u64, message: &str, template: Option<&str>) -> kyur
     BAR_MANAGER.get().unwrap().create_bar(
         len,
         message,
-        template.unwrap_or("{msg}: {bar} ({pos}/{len})"),
+        template.unwrap_or("{msg}: {bar} ({state_emoji} {pos}/{len})"),
         true,
     )
 }

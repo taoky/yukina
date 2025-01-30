@@ -404,7 +404,6 @@ pub async fn stage3(
             });
         }
     }
-    progressbar.finish();
     tracing::info!(
         "Local hit: {}, SizeDB hit: {}, SizeDB 404: {}, Remote hit: {}, Remote miss: {}",
         hit_stats.local_hit,
