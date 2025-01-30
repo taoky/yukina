@@ -108,6 +108,17 @@ location @nixchannels_404 {
     # just return 404, nix knows how to handle it
     return 404;
 }
+
+location /flathub/objects/ {
+    access_log /var/log/nginx/cacheproxy/flathub.log;
+    autoindex off;
+    try_files $uri $uri/ @flathub_302;
+}
+
+location @flathub_302 {
+    access_log /var/log/nginx/cacheproxy/flathub.log;
+    rewrite ^/flathub/(.*)$ $scheme://dl.flathub.org/repo/$1 redirect;
+}
 ```
 
 ## Yuki configuration

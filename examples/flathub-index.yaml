@@ -1,0 +1,5 @@
+image: ustcmirror/flatpak:latest
+cron: 57 0/1 * * *
+logRotCycle: 10
+name: flathub-index
+storageDir: /srv/repo/flathub/
