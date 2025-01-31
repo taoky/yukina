@@ -2,7 +2,7 @@ image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
   YUKINA_FILTER: --filter ^.+/.+\.conda$ --filter ^.+/.+\.tar\.bz2$
-  YUKINA_EXTRA: --strip-prefix /cloud/conda-forge --user-agent "Yukina Caching Tool (https://mirrors.ustc.edu.cn)"
+  YUKINA_EXTRA: --strip-prefix /cloud/conda-forge
   YUKINA_REPO: anaconda
   UPSTREAM: https://nanomirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
 cron: 40 2/1 * * *

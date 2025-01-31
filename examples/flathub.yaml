@@ -1,9 +1,8 @@
 image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
-  YUKINA_FILTER: --filter ^../.+
-  YUKINA_EXTRA: --strip-prefix /objects --user-agent "Yukina Caching Tool (https://mirrors.ustc.edu.cn)" --min-vote-count 1
-  UPSTREAM: https://dl.flathub.org/repo/objects/
+  YUKINA_FILTER: --filter ^(objects|delta-indexes|deltas)/../.+
+  UPSTREAM: https://dl.flathub.org/repo/
 cron: 40 1/1 * * *
 logRotCycle: 50
 name: flathub
