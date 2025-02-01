@@ -6,6 +6,6 @@ envs:
 cron: 40 1/1 * * *
 logRotCycle: 50
 name: flathub
-storageDir: /srv/repo/flathub/objects/
+storageDir: /srv/repo/flathub/
 volumes:
   /var/log/nginx/cacheproxy: /nginx-log:ro
