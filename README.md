@@ -109,7 +109,7 @@ location @nixchannels_404 {
     return 404;
 }
 
-location /flathub/objects/ {
+location ~ ^/flathub/(objects|deltas|delta-indexes)/ {
     access_log /var/log/nginx/cacheproxy/flathub.log;
     autoindex off;
     try_files $uri $uri/ @flathub_302;
