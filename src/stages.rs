@@ -21,11 +21,11 @@ pub fn stage1(args: &Cli) -> UserVote {
         .expect("read log path failed")
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.file_type().ok().map_or(false, |ft| ft.is_file())
+            entry.file_type().ok().is_some_and(|ft| ft.is_file())
                 && entry
                     .file_name()
                     .to_str()
-                    .map_or(false, |s| s.starts_with(&format!("{}.log", args.name)))
+                    .is_some_and(|s| s.starts_with(&format!("{}.log", args.name)))
         })
         .collect();
     entries.sort_by_cached_key(|entry| {
@@ -378,7 +378,7 @@ pub async fn stage3(
                     }
                     Err(e) => {
                         tracing::info!("Invalid file ({}): {}", e, url_path);
-                        let is_404 = e.status().map_or(false, |s| s == 404);
+                        let is_404 = e.status().is_some_and(|s| s == 404);
                         if is_404 {
                             insert_remotedb(remote_sizedb, url_path, None);
                         }
