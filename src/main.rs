@@ -15,7 +15,7 @@ use std::{
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
-use tracing::warn;
+use tracing::{level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use yukina::{db_remove, db_set, RemoteSizeDBItem};
@@ -478,10 +478,6 @@ pub static BAR_MANAGER: OnceLock<kyuri::Manager> = OnceLock::new();
 
 #[tokio::main]
 async fn main() {
-    std::env::set_var(
-        "RUST_LOG",
-        format!("info,{}", std::env::var("RUST_LOG").unwrap_or_default()),
-    );
     let enable_color = std::env::var("NO_COLOR").is_err();
     BAR_MANAGER.get_or_init(|| {
         let manager = kyuri::Manager::new(std::time::Duration::from_secs(1));
@@ -491,7 +487,12 @@ async fn main() {
     let bar_writer = BAR_MANAGER.get().unwrap().create_writer();
     tracing_subscriber::fmt()
         .with_thread_ids(true)
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(
+            // https://github.com/tokio-rs/tracing/issues/735
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
         .with_ansi(enable_color)
         .with_writer(Mutex::new(bar_writer))
         .init();
