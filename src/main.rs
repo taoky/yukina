@@ -470,7 +470,10 @@ fn open_db(path: Option<&PathBuf>) -> Option<sled::Db> {
 }
 
 fn get_hit_rate(hit: usize, miss: usize) -> f64 {
-    assert!(hit + miss > 0);
+    if hit + miss == 0 {
+        tracing::warn!("hit + miss == 0. Please double-check your configuration.");
+        return 0.0;
+    }
     hit as f64 / (hit + miss) as f64 * 100.0
 }
 
