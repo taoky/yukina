@@ -532,7 +532,7 @@ pub async fn stage4(
     macro_rules! increase_error_threshold {
         ($c: expr) => {
             $c += 1;
-            if $c > crate::DOWNLOAD_ERROR_THRESHOLD {
+            if $c > args.download_error_threshold {
                 return Err(Stage4Error::DownloadErrorOverThreshold.into());
             }
         };

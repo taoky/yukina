@@ -132,9 +132,12 @@ struct Cli {
     /// Don't download anything, just remove unpopular files.
     #[clap(long)]
     gc_only: bool,
-}
 
-const DOWNLOAD_ERROR_THRESHOLD: usize = 5;
+    /// Error threshold for download. If the number of download errors exceeds this threshold, yukina will exit with error code 1.
+    /// Setting this to 0 will disable this early exit behavior.
+    #[clap(long, default_value_t = 5)]
+    download_error_threshold: usize,
+}
 
 enum LogFileType {
     Plain,

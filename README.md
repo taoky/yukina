@@ -172,6 +172,8 @@ Options:
           Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold
       --gc-only
           Don't download anything, just remove unpopular files
+      --download-error-threshold <DOWNLOAD_ERROR_THRESHOLD>
+          Error threshold for download. If the number of download errors exceeds this threshold, yukina will exit with error code 1. Setting this to 0 will disable this early exit behavior [default: 5]
   -h, --help
           Print help
   -V, --version
