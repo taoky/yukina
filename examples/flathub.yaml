@@ -1,7 +1,7 @@
 image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
-  YUKINA_FILTER: --filter ^(objects|delta-indexes|deltas)/../.+
+  YUKINA_FILTER: --filter ^(objects|delta-indexes|deltas)/../.+ --min-vote-count 1 --download-error-threshold 0
   UPSTREAM: https://dl.flathub.org/repo/
 cron: 40 1/1 * * *
 logRotCycle: 50
