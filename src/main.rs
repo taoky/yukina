@@ -197,7 +197,10 @@ fn log_uri_normalize(uri: &str) -> Result<String> {
     };
     url.set_query(None);
     url.set_fragment(None);
-    let mut path = url.path().to_string();
+    let path = url.path().to_string();
+    let mut path = percent_encoding::percent_decode_str(&path)
+        .decode_utf8()?
+        .to_string();
     // replace duplicated slashes until there is no more
     loop {
         let new_path = path.replace("//", "/");
@@ -576,5 +579,16 @@ mod tests {
         );
         assert_eq!(log_uri_normalize("/test////abc").unwrap(), "/test/abc");
         assert_eq!(log_uri_normalize("http://mirrors.ustc.edu.cn/nix-channels/store/kvnv3yfhwdvmmci261m092llmrwkw2rr.narinfo").unwrap(), "/nix-channels/store/kvnv3yfhwdvmmci261m092llmrwkw2rr.narinfo");
+        assert_eq!(
+            log_uri_normalize(
+                "/anaconda/cloud/conda-forge/linux-64/x264-1%21164.3095-h166bdaf_2.tar.bz2"
+            )
+            .unwrap(),
+            "/anaconda/cloud/conda-forge/linux-64/x264-1!164.3095-h166bdaf_2.tar.bz2"
+        );
+        assert_eq!(
+            log_uri_normalize("/memtest86+/test.txt").unwrap(),
+            "/memtest86+/test.txt"
+        );
     }
 }

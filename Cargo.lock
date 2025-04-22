@@ -2337,6 +2337,7 @@ dependencies = [
  "ipnetwork",
  "kyuri",
  "parse-size",
+ "percent-encoding",
  "regex",
  "reqwest",
  "serde",
