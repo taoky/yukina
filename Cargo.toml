@@ -18,7 +18,7 @@ kyuri = "0.2.4"
 ipnetwork = "0.20.0"
 parse-size = "1.0.0"
 regex = "1.10.4"
-reqwest = { version = "0.12.9", features = ["stream"] }
+reqwest = { version = "0.12.9", default-features = false, features = ["stream", "socks", "rustls-tls-native-roots", "http2"] }
 sled = "0.34.7"
 tokio = { version = "1.43.1", features = ["rt", "macros", "rt-multi-thread"] }
 tracing = "0.1"
