@@ -205,22 +205,38 @@ pub fn stage1(args: &Cli) -> UserVote {
 
 /// Analyse local files and get metadata of files we are interested in
 pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
-    let mut res = Vec::new();
-    for entry in walkdir::WalkDir::new(&args.repo_path) {
-        let entry = entry.expect("walkdir failed");
-        // We're not interested in symlinks, etc., and dirs means that we're not in the leaf node
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let path = entry
-            .path()
-            .strip_prefix(args.repo_path.clone())
+    fn get_path_from_walkdir_entry(
+        repo_path: &std::path::Path,
+        entry: Result<&walkdir::DirEntry, &walkdir::Error>,
+    ) -> String {
+        let path = match entry {
+            Ok(e) => e.path().to_owned(),
+            Err(e) => {
+                tracing::warn!("walkdir entry error: {}", e);
+                e.path().expect("empty path in walkdir error").to_owned()
+            }
+        };
+        path.strip_prefix(repo_path)
             .expect("unexpected strip prefix failed")
             .to_str()
-            .expect("unexpected path conversion failed");
+            .expect("unexpected path conversion failed")
+            .to_string()
+    }
+
+    let mut res = Vec::new();
+    for entry in walkdir::WalkDir::new(&args.repo_path) {
+        // do some filtering first -- in case dir is not accessible, etc.
+        let path = get_path_from_walkdir_entry(&args.repo_path, entry.as_ref());
+        let path = path.as_str();
         // path shall not start with `/`.
         assert!(!path.starts_with('/'));
         if !matches_filter(path, &args.filter) {
+            continue;
+        }
+
+        let entry = entry.expect("walkdir failed");
+        // We're not interested in symlinks, etc., and dirs means that we're not in the leaf node
+        if !entry.file_type().is_file() {
             continue;
         }
         let filesize = {

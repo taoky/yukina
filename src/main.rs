@@ -89,7 +89,7 @@ struct Cli {
     #[clap(long, value_parser)]
     filter: Vec<Regex>,
 
-    /// URL of the remote repo
+    /// URL of the remote repo. Still need to give any URL (would not be used) when --gc-only is set.
     #[clap(long)]
     url: Url,
 
