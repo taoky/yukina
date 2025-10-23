@@ -22,6 +22,7 @@ pub struct LogItem {
     pub status: u16,
     #[allow(dead_code)]
     pub user_agent: String,
+    pub proxied: bool,
 }
 
 pub trait LogParser {

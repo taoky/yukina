@@ -12,6 +12,8 @@ struct RawLogItem {
     size: u64,          // $body_bytes_sent
     status: u16,        // $status
     user_agent: String, // $http_user_agent
+    #[serde(default)]
+    proxied: String, // custom field to indicate if the request was proxied
 }
 
 #[derive(Default)]
@@ -39,6 +41,7 @@ impl LogParser for MirrorJsonParser {
             size: raw.size,
             status: raw.status,
             user_agent: raw.user_agent,
+            proxied: raw.proxied != "0",
         })
     }
 }
@@ -58,6 +61,10 @@ mod tests {
         assert_eq!(item.size, 170920);
         assert_eq!(item.status, 200);
         assert_eq!(item.user_agent, "?");
-        assert_eq!(item.time.to_rfc3339(), "2025-10-23T19:19:36.709000110+00:00");
+        assert_eq!(
+            item.time.to_rfc3339(),
+            "2025-10-23T19:19:36.709000110+00:00"
+        );
+        assert_eq!(item.proxied, false);
     }
 }

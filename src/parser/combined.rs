@@ -125,6 +125,7 @@ impl LogParser for CombinedParser {
             size,
             status,
             user_agent: user_agent.to_string(),
+            proxied: false, // combined log format does not have proxied info
         })
     }
 }

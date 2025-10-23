@@ -163,10 +163,10 @@ pub fn stage1(args: &Cli) -> UserVote {
             }
             let vote = vote.entry(path.to_owned()).or_default();
             vote.count += 1;
-            if item.status == 200 {
+            if item.status == 200 && item.proxied == false {
                 vote.success_count += 1;
                 hit += 1;
-            } else if item.status == 302 || item.status == 404 {
+            } else if item.status == 302 || item.status == 404 || item.proxied == true {
                 vote.reject_count += 1;
                 miss += 1;
             } else {

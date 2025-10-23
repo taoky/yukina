@@ -149,11 +149,11 @@ Options:
       --size-limit <SIZE_LIMIT>
           Size limit of your repo
       --filter <FILTER>
-          Filter for urls and file paths you interested in (usually blobs of the repo)
+          Filter for urls and file paths you interested in (usually blobs of the repo). Relative to repo_path
       --url <URL>
-          URL of the remote repo
+          URL of the remote repo. Still need to give any URL (would not be used) when --gc-only is set
       --strip-prefix <STRIP_PREFIX>
-          Optional prefix to strip from the path after the repo name
+          Optional prefix to strip from the path after the repo name. Access URLs must match strip_prefix if set
       --remote-sizedb <REMOTE_SIZEDB>
           A kv database of file size to speed up stage3 in case yukina would run frequently
       --local-sizedb <LOCAL_SIZEDB>
@@ -174,6 +174,8 @@ Options:
           Don't download anything, just remove unpopular files
       --download-error-threshold <DOWNLOAD_ERROR_THRESHOLD>
           Error threshold for download. If the number of download errors exceeds this threshold, yukina will exit with error code 1. Setting this to 0 will disable this early exit behavior [default: 5]
+      --log-format <LOG_FORMAT>
+          Format of the log file If not set, use combined log format (the default of nginx) [default: combined] [possible values: combined, mirror-json]
   -h, --help
           Print help
   -V, --version
@@ -183,6 +185,29 @@ Options:
 "Extension" is a special option for specific repo types:
 
 - nix-channels: This extension would parse narinfo file and add the blob urls to the download list.
+
+"Log format" option is used to specify the format of your nginx access log. "mirror-json" is configured like this:
+
+```nginx
+set $proxied 0;  # manually set to 1 inside 302/404 proxy_pass locations
+log_format mirror_json escape=json '{'
+    '"timestamp":$msec,'
+    '"clientip":"$remote_addr",'
+    '"serverip":"$server_addr",'
+    '"method":"$request_method",'
+    '"scheme":"$scheme",'
+    '"url":"$request_uri",'
+    '"status":$status,'
+    '"size":$body_bytes_sent,'
+    '"resp_time":$request_time,'
+    '"http_host":"$host",'
+    '"referer":"$http_referer",'
+    '"user_agent":"$http_user_agent",'
+    '"request_id":"$request_id",'
+    '"proto":"$server_protocol",'
+    '"proxied":"$proxied"'
+    '}';
+```
 
 `kv` is a very simple wrapper around `sled` (same as the version yukina uses). KV tool:
 
