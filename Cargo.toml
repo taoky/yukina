@@ -1,6 +1,6 @@
 [package]
 name = "yukina"
-version = "0.20250828.0"
+version = "0.20251024.0"
 edition = "2021"
 description = "YUKI-based Next-generation Async-cache"
 default-run = "yukina"
