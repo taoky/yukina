@@ -9,10 +9,12 @@ use std::{
 use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
-    combined, construct_url, deduce_log_file_type, download_file, get_hit_rate,
-    get_ip_prefix_string, get_progress_bar, head_file, insert_remotedb, log_uri_normalize,
-    matches_filter, normalize_vote, remove_file, Cli, FileStats, LogFileType, NormalizedFileStats,
-    NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
+    construct_url, deduce_log_file_type, download_file, get_hit_rate, get_ip_prefix_string,
+    get_progress_bar, head_file, insert_remotedb, log_uri_normalize, matches_filter,
+    normalize_vote,
+    parser::{self, LogParser},
+    remove_file, Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote,
+    NormalizedVoteItem, UserVote, VoteValue,
 };
 
 /// Analyse nginx logs and get user votes
@@ -40,7 +42,7 @@ pub fn stage1(args: &Cli) -> UserVote {
     tracing::debug!("Entries: {:?}", entries);
 
     let now_utc = chrono::Utc::now();
-    let combined_parser = combined::CombinedParser::default();
+    let combined_parser = parser::combined::CombinedParser::default();
 
     #[derive(Debug, Eq, PartialEq, Hash)]
     struct IpPrefixUrl {

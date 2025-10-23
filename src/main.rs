@@ -2,7 +2,7 @@
 use anyhow::Result;
 use bar::get_progress_bar;
 use chrono::Utc;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
@@ -24,8 +24,8 @@ use shadow_rs::shadow;
 shadow!(build);
 
 mod bar;
-mod combined;
 mod extension;
+mod parser;
 mod stages;
 
 use stages::*;
@@ -43,12 +43,12 @@ fn get_version() -> &'static str {
         Box::leak(format!("{} (dirty)", build::SHORT_COMMIT).into_boxed_str())
     } else if tag.is_empty() {
         if short_commit.is_empty() {
-            return build::PKG_VERSION;
+            build::PKG_VERSION
         } else {
-            return short_commit;
+            short_commit
         }
     } else {
-        return tag;
+        tag
     }
 }
 
@@ -137,6 +137,17 @@ struct Cli {
     /// Setting this to 0 will disable this early exit behavior.
     #[clap(long, default_value_t = 5)]
     download_error_threshold: usize,
+
+    /// Format of the log file
+    /// If not set, use combined log format (the default of nginx)
+    #[clap(long, value_enum, default_value_t = LogFormat::Combined)]
+    log_format: LogFormat,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum LogFormat {
+    Combined,
+    MirrorJson,
 }
 
 enum LogFileType {
