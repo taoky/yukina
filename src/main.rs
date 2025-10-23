@@ -2,7 +2,7 @@
 use anyhow::Result;
 use bar::get_progress_bar;
 use chrono::Utc;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
@@ -29,6 +29,8 @@ mod parser;
 mod stages;
 
 use stages::*;
+
+use crate::parser::LogFormat;
 
 fn parse_bytes(s: &str) -> Result<u64, clap::Error> {
     parse_size(s).map_err(|e| clap::Error::raw(clap::error::ErrorKind::ValueValidation, e))
@@ -142,12 +144,6 @@ struct Cli {
     /// If not set, use combined log format (the default of nginx)
     #[clap(long, value_enum, default_value_t = LogFormat::Combined)]
     log_format: LogFormat,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum LogFormat {
-    Combined,
-    MirrorJson,
 }
 
 enum LogFileType {
