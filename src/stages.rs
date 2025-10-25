@@ -572,13 +572,17 @@ pub async fn stage4(
     // Here, a download error counter is maintained: network is more likely to be unstable, so we're not going to stop the process immediately.
     // However, if the error count exceeds a certain threshold, we will stop the process.
     let mut download_error_cnt: usize = 0;
-    macro_rules! increase_error_threshold {
-        ($c: expr) => {
-            $c += 1;
-            if args.download_error_threshold > 0 && $c > args.download_error_threshold {
-                return Err(Stage4Error::DownloadErrorOverThreshold.into());
-            }
-        };
+
+    fn increase_error_threshold(
+        args: &Cli,
+        download_error_cnt: &mut usize,
+    ) -> Result<(), Stage4Error> {
+        *download_error_cnt += 1;
+        if args.download_error_threshold > 0 && *download_error_cnt > args.download_error_threshold
+        {
+            return Err(Stage4Error::DownloadErrorOverThreshold);
+        }
+        Ok(())
     }
 
     fn is_not_found(err: anyhow::Error) -> bool {
@@ -593,66 +597,88 @@ pub async fn stage4(
     // Extension might bring duplicated items...
     // Use a HashSet to store paths we've seen (downloaded)
     let mut seen = HashSet::new();
-    macro_rules! download {
-        ($remote_item: expr, $remote_size: expr) => {
-            if seen.insert($remote_item.path.clone()) {
-                let download_state = download_file(args, &$remote_item, client).await;
-                match download_state {
-                    Ok(actual_size) => {
-                        if args.dry_run {
-                            sum += $remote_size;
-                        } else {
-                            sum += actual_size as u64;
-                            if ($remote_size as u64) != actual_size as u64 {
-                                tracing::warn!(
-                                    "Size mismatch: {} (remote) vs {} (actual)",
-                                    $remote_size,
-                                    actual_size
-                                );
-                            }
-                            let _ = db_set::<LocalSizeDBItem>(
-                                local_sizedb,
-                                &$remote_item.path,
-                                actual_size.into(),
+    async fn download_impl(
+        args: &Cli,
+        client: &reqwest::Client,
+        local_sizedb: Option<&sled::Db>,
+        remote_sizedb: Option<&sled::Db>,
+        remote_item: NormalizedVoteItem,
+        remote_size: u64,
+        seen: &mut HashSet<String>,
+        sum: &mut u64,
+        to_download_queue: &mut BinaryHeap<NormalizedVoteItem>,
+        extension: &Option<Box<dyn crate::extension::Extension>>,
+        download_error_cnt: &mut usize,
+    ) -> Result<(), Stage4Error> {
+        if seen.insert(remote_item.path.clone()) {
+            let download_state = download_file(args, &remote_item, client).await;
+            match download_state {
+                Ok(actual_size) => {
+                    if args.dry_run {
+                        *sum += remote_size;
+                    } else {
+                        *sum += actual_size as u64;
+                        if remote_size != actual_size as u64 {
+                            tracing::warn!(
+                                "Size mismatch: {} (remote) vs {} (actual)",
+                                remote_size,
+                                actual_size
                             );
                         }
-                        // Run extension and push to download queue
-                        if let Some(ext) = &extension {
-                            if let Ok(res) = ext.parse_downloaded_file(args, &$remote_item, client) {
-                                if let Some(new_item) = res {
-                                    let new_item = new_item.clone();
-                                    tracing::info!(
-                                        "Extension {} result: {:?}",
-                                        ext.name(),
-                                        new_item
-                                    );
-                                    to_download_queue.push(new_item);
-                                }
-                            } else {
-                                tracing::warn!(
-                                    "Extension {} error: {:?}",
-                                    ext.name(),
-                                    $remote_item
-                                );
-                            }
-                        }
+                        let _ = db_set::<LocalSizeDBItem>(
+                            local_sizedb,
+                            &remote_item.path,
+                            actual_size.into(),
+                        );
                     }
-                    Err(e) => {
-                        tracing::error!("Download error: {}", e);
-                        if is_not_found(e) {
-                            // Don't add to error count
-                            // Skip and clear remote hit in db
-                            tracing::info!(
-                                "Remove {} from remote sizedb as it does not exist.",
-                                $remote_item.path
-                            );
-                            let _ = db_remove(remote_sizedb, &$remote_item.path);
+                    // Run extension and push to download queue
+                    if let Some(ext) = &extension {
+                        if let Ok(res) = ext.parse_downloaded_file(args, &remote_item, client) {
+                            if let Some(new_item) = res {
+                                let new_item = new_item.clone();
+                                tracing::info!("Extension {} result: {:?}", ext.name(), new_item);
+                                to_download_queue.push(new_item);
+                            }
                         } else {
-                            increase_error_threshold!(download_error_cnt);
+                            tracing::warn!("Extension {} error: {:?}", ext.name(), remote_item);
                         }
                     }
                 }
+                Err(e) => {
+                    tracing::error!("Download error: {}", e);
+                    if is_not_found(e) {
+                        // Don't add to error count
+                        // Skip and clear remote hit in db
+                        tracing::info!(
+                            "Remove {} from remote sizedb as it does not exist.",
+                            remote_item.path
+                        );
+                        let _ = db_remove(remote_sizedb, &remote_item.path);
+                    } else {
+                        increase_error_threshold(args, download_error_cnt)?;
+                    }
+                }
             }
+        }
+        Ok(())
+    }
+
+    macro_rules! download {
+        ($item: expr, $remote_size: expr) => {
+            download_impl(
+                args,
+                client,
+                local_sizedb,
+                remote_sizedb,
+                $item,
+                $remote_size,
+                &mut seen,
+                &mut sum,
+                &mut to_download_queue,
+                &extension,
+                &mut download_error_cnt,
+            )
+            .await?;
         };
     }
 
