@@ -11,9 +11,103 @@ use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 use crate::{
     construct_url, deduce_log_file_type, download_file, get_hit_rate, get_ip_prefix_string,
     get_progress_bar, head_file, insert_remotedb, log_uri_normalize, matches_filter,
-    normalize_vote, parser::get_log_parser, remove_file, Cli, FileStats, LogFileType,
-    NormalizedFileStats, NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
+    normalize_vote,
+    parser::{get_log_parser, LogItem},
+    remove_file, Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote,
+    NormalizedVoteItem, UserVote, VoteValue,
 };
+
+#[derive(Debug, Eq, PartialEq, Hash)]
+struct IpPrefixUrl {
+    ip_prefix: String,
+    url: String,
+}
+
+fn process_logitem(
+    args: &Cli,
+    item: LogItem,
+    vote: &mut HashMap<String, VoteValue>,
+    access_record: &mut HashMap<IpPrefixUrl, DateTime<Utc>>,
+    now_utc: DateTime<Utc>,
+    hit: &mut usize,
+    miss: &mut usize,
+) -> bool {
+    // Returns true if should stop processing further logs
+    let path = log_uri_normalize(&item.url);
+    let path = match path {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("Invalid path: {}, with err {}", item.url, e);
+            return false;
+        }
+    };
+    let duration = now_utc.signed_duration_since(item.time);
+    if duration > TimeDelta::from_std(*args.log_duration).unwrap() {
+        return true;
+    }
+    let client_prefix = get_ip_prefix_string(item.client);
+    let ip_prefix_url = IpPrefixUrl {
+        ip_prefix: client_prefix,
+        url: path.clone(),
+    };
+    if let Some(last_time) = access_record.get(&ip_prefix_url) {
+        let delta = item.time.signed_duration_since(*last_time);
+        if delta.num_seconds() < 60 * 5 {
+            return false;
+        }
+    }
+    // strip prefix of the path, convert /reponame/some/path/xxx => /some/path/xxx
+    let mut path = match path.strip_prefix(&format!("/{}", args.name)) {
+        Some(p) => p,
+        None => {
+            tracing::warn!(
+                "unexpected strip prefix (repo name) failed for path {}",
+                path
+            );
+            return false;
+        }
+    };
+    // strip further to match repopath
+    if let Some(prefix) = &args.strip_prefix {
+        path = match path.strip_prefix(prefix) {
+            Some(p) => p,
+            None => {
+                tracing::debug!(
+                    "unexpected strip prefix (user-given) failed for path {}",
+                    path
+                );
+                return false;
+            }
+        };
+    }
+    // path shall not start with `/`
+    if path.starts_with('/') {
+        path = path.strip_prefix('/').unwrap();
+    }
+    if path.is_empty() {
+        return false;
+    }
+    // path now looks like path/xxx
+    if !matches_filter(path, &args.filter) {
+        return false;
+    }
+    let vote = vote.entry(path.to_owned()).or_default();
+    vote.count += 1;
+    if item.status == 200 && !item.proxied {
+        vote.success_count += 1;
+        *hit += 1;
+    } else if item.status == 302 || item.status == 404 || item.proxied {
+        vote.reject_count += 1;
+        *miss += 1;
+    } else {
+        tracing::debug!("Unknown status: {}", item.status);
+        vote.unknown_count += 1;
+    }
+    vote.resp_size = vote.resp_size.max(item.size);
+    access_record.insert(ip_prefix_url, item.time.into());
+
+    false
+}
 
 /// Analyse nginx logs and get user votes
 pub fn stage1(args: &Cli) -> UserVote {
@@ -41,12 +135,6 @@ pub fn stage1(args: &Cli) -> UserVote {
 
     let now_utc = chrono::Utc::now();
     let combined_parser = get_log_parser(args.log_format);
-
-    #[derive(Debug, Eq, PartialEq, Hash)]
-    struct IpPrefixUrl {
-        ip_prefix: String,
-        url: String,
-    }
 
     let mut access_record: HashMap<IpPrefixUrl, DateTime<Utc>> = HashMap::new();
     let mut vote: HashMap<String, VoteValue> = HashMap::new();
@@ -102,79 +190,18 @@ pub fn stage1(args: &Cli) -> UserVote {
         for line in bufreader.lines() {
             let line = line.expect("read line failed");
             let item = combined_parser.parse(&line).expect("parse line failed");
-            let path = log_uri_normalize(&item.url);
-            let path = match path {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!("Invalid path: {}, with err {}", item.url, e);
-                    continue;
-                }
-            };
-            let duration = now_utc.signed_duration_since(item.time);
-            if duration > TimeDelta::from_std(*args.log_duration).unwrap() {
-                stop_iterate_flag = true;
-                continue;
+            stop_iterate_flag = process_logitem(
+                args,
+                item,
+                &mut vote,
+                &mut access_record,
+                now_utc,
+                &mut hit,
+                &mut miss,
+            );
+            if stop_iterate_flag {
+                break;
             }
-            let client_prefix = get_ip_prefix_string(item.client);
-            let ip_prefix_url = IpPrefixUrl {
-                ip_prefix: client_prefix,
-                url: path.clone(),
-            };
-            if let Some(last_time) = access_record.get(&ip_prefix_url) {
-                let delta = item.time.signed_duration_since(*last_time);
-                if delta.num_seconds() < 60 * 5 {
-                    continue;
-                }
-            }
-            // strip prefix of the path, convert /reponame/some/path/xxx => /some/path/xxx
-            let mut path = match path.strip_prefix(&format!("/{}", args.name)) {
-                Some(p) => p,
-                None => {
-                    tracing::warn!(
-                        "unexpected strip prefix (repo name) failed for path {}",
-                        path
-                    );
-                    continue;
-                }
-            };
-            // strip further to match repopath
-            if let Some(prefix) = &args.strip_prefix {
-                path = match path.strip_prefix(prefix) {
-                    Some(p) => p,
-                    None => {
-                        tracing::debug!(
-                            "unexpected strip prefix (user-given) failed for path {}",
-                            path
-                        );
-                        continue;
-                    }
-                };
-            }
-            // path shall not start with `/`
-            if path.starts_with('/') {
-                path = path.strip_prefix('/').unwrap();
-            }
-            if path.is_empty() {
-                continue;
-            }
-            // path now looks like path/xxx
-            if !matches_filter(path, &args.filter) {
-                continue;
-            }
-            let vote = vote.entry(path.to_owned()).or_default();
-            vote.count += 1;
-            if item.status == 200 && item.proxied == false {
-                vote.success_count += 1;
-                hit += 1;
-            } else if item.status == 302 || item.status == 404 || item.proxied == true {
-                vote.reject_count += 1;
-                miss += 1;
-            } else {
-                tracing::debug!("Unknown status: {}", item.status);
-                vote.unknown_count += 1;
-            }
-            vote.resp_size = vote.resp_size.max(item.size);
-            access_record.insert(ip_prefix_url, item.time.into());
         }
 
         // Reap child processes, if any
@@ -591,7 +618,7 @@ pub async fn stage4(
                         }
                         // Run extension and push to download queue
                         if let Some(ext) = &extension {
-                            if let Ok(res) = ext.parse(args, &$remote_item, client) {
+                            if let Ok(res) = ext.parse_downloaded_file(args, &$remote_item, client) {
                                 if let Some(new_item) = res {
                                     let new_item = new_item.clone();
                                     tracing::info!(

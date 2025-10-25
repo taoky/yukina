@@ -7,7 +7,7 @@ use crate::{Cli, NormalizedVoteItem};
 use self::nix_channels::NixChannels;
 pub trait Extension {
     fn name(&self) -> &'static str;
-    fn parse(
+    fn parse_downloaded_file(
         &self,
         args: &Cli,
         item: &NormalizedVoteItem,

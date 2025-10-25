@@ -45,7 +45,7 @@ impl Extension for NixChannels {
         "nixchannels"
     }
 
-    fn parse(
+    fn parse_downloaded_file(
         &self,
         args: &Cli,
         item: &NormalizedVoteItem,
