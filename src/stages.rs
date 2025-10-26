@@ -93,7 +93,7 @@ fn process_logitem(
     }
     let vote = vote.entry(path.to_owned()).or_default();
     vote.count += 1;
-    if item.status == 200 && !item.proxied {
+    if (item.status == 200 || item.status == 206) && !item.proxied {
         vote.success_count += 1;
         *hit += 1;
     } else if item.status == 302 || item.status == 404 || item.proxied {
