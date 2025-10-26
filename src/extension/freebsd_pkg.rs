@@ -48,7 +48,7 @@ impl Extension for FreeBSDPkg {
                         "packagesite.yaml",
                     ])
                     .status()
-                    .context("running tar failed")?;
+                    .context("running tar failed (are you using GNU tar or not?)")?;
 
                 if !status.success() {
                     anyhow::bail!("tar failed for {:?}", packagesite_path);
