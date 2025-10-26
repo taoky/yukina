@@ -81,7 +81,7 @@ impl Extension for FreeBSDPkg {
             }
         }
 
-        unimplemented!()
+        Ok(())
     }
 
     fn post_process_downloaded_file(
