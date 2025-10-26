@@ -198,6 +198,7 @@ Options:
 "Extension" is a special option for specific repo types:
 
 - nix-channels: This extension would parse narinfo file and add the blob urls to the download list.
+- freebsd-pkg: This extension would parse packagesite.txz, check downloaded files sha256, and create hard links to .by-hash folder to keep compatibility with our sync script.
 
 "Log format" option is used to specify the format of your nginx access log. "mirror-json" is configured like this:
 
