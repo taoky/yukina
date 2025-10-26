@@ -38,6 +38,7 @@ impl Extension for FreeBSDPkg {
                 if !packagesite_path.exists() {
                     continue;
                 }
+                let packagesite_path = packagesite_path.canonicalize()?;
                 let status = Command::new("tar")
                     .args([
                         "-C",
@@ -69,8 +70,7 @@ impl Extension for FreeBSDPkg {
                     let repopath_full = packagesite_path
                         .parent()
                         .unwrap()
-                        .join(repopath)
-                        .canonicalize()?;
+                        .join(repopath);
                     self.metadata_path_to_sha256_mapping.insert(
                         repopath_full.to_string_lossy().to_string(),
                         hash_value.to_string(),
