@@ -459,7 +459,7 @@ async fn download_file(
         }
         let target_path = args.repo_path.join(path);
         if let Some(ext) = extension {
-            if let Err(e) = ext.post_process_downloaded_file(args, &tmp_path) {
+            if let Err(e) = ext.post_process_downloaded_file(args, &tmp_path, &target_path) {
                 tracing::warn!("Post-process downloaded file failed: {}", e);
                 std::fs::remove_file(&tmp_path)?;
                 return Err(e);

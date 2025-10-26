@@ -20,7 +20,12 @@ pub trait Extension {
         Ok(None)
     }
     /// Code to run after downloaded and before being renamed to final path
-    fn post_process_downloaded_file(&self, _args: &Cli, _tmp_path: &Path) -> Result<()> {
+    fn post_process_downloaded_file(
+        &self,
+        _args: &Cli,
+        _tmp_path: &Path,
+        _target_path: &Path,
+    ) -> Result<()> {
         Ok(())
     }
 }

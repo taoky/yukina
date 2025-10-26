@@ -67,10 +67,7 @@ impl Extension for FreeBSDPkg {
                         .as_str()
                         .context("missing 'repopath' in JSON line")?;
 
-                    let repopath_full = packagesite_path
-                        .parent()
-                        .unwrap()
-                        .join(repopath);
+                    let repopath_full = packagesite_path.parent().unwrap().join(repopath);
                     self.metadata_path_to_sha256_mapping.insert(
                         repopath_full.to_string_lossy().to_string(),
                         hash_value.to_string(),
@@ -88,6 +85,7 @@ impl Extension for FreeBSDPkg {
         &self,
         args: &crate::Cli,
         tmp_path: &std::path::Path,
+        target_path: &std::path::Path,
     ) -> anyhow::Result<()> {
         // create hard link of its sha256sum to .by-hash/
 
@@ -107,10 +105,14 @@ impl Extension for FreeBSDPkg {
         let sha256sum = parts[0];
         let expected_sha256sum = self
             .metadata_path_to_sha256_mapping
-            .get(&tmp_path.to_string_lossy().to_string())
+            .get(&target_path.to_string_lossy().to_string())
             .context("missing sha256sum mapping for downloaded file")?;
         if sha256sum != expected_sha256sum {
-            anyhow::bail!("sha256sum mismatch for downloaded file");
+            anyhow::bail!(
+                "sha256sum mismatch for downloaded file ({} != {})",
+                sha256sum,
+                expected_sha256sum
+            );
         }
 
         // Create hard link in .by-hash/
