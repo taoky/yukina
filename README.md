@@ -119,6 +119,19 @@ location @flathub_302 {
     access_log /var/log/nginx/cacheproxy/flathub.log;
     rewrite ^/flathub/(.*)$ $scheme://dl.flathub.org/repo/$1 redirect;
 }
+
+location /freebsd-pkg/ {
+    location ~ ^/freebsd-pkg/.+\.pkg {
+        access_log /var/log/nginx/cacheproxy/freebsd-pkg.log;
+        try_files $uri $uri/ @freebsd_pkg_302;
+    }
+}
+
+location @freebsd_pkg_302 {
+    access_log /var/log/nginx/cacheproxy/freebsd-pkg.log;
+    # FreeBSD pkg server only supports HTTP.
+    rewrite ^/freebsd-pkg/(.*)$ http://pkg.freebsd.org/$1 redirect;
+}
 ```
 
 ## Yuki configuration

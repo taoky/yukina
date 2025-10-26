@@ -1,0 +1,10 @@
+envs:
+  FBSD_PKG_EXCLUDE: ^FreeBSD:((8|9|10):|[0-9]+:(?!amd64|aarch64)[a-z0-9]+$)
+  FBSD_PKG_JOBS: "5"
+  FBSD_PKG_UPSTREAM: http://pkg.freebsd.org
+  FBSD_PKG_INDEX_ONLY: true
+image: ustcmirror/freebsd-pkg:latest
+cron: 23 1 * * *
+logRotCycle: 10
+name: freebsd-pkg-index
+storageDir: /srv/repo/freebsd-pkg
