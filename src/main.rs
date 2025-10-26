@@ -316,7 +316,15 @@ fn insert_remotedb(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
 }
 
 fn construct_url(args: &Cli, url_path: &str) -> Url {
-    args.url.clone().join(url_path).expect("join url failed")
+    // Make it safe for joining
+    let url_path = if url_path.starts_with("./") {
+        url_path.to_string()
+    } else if url_path.starts_with('/') {
+        format!(".{url_path}")
+    } else {
+        format!("./{url_path}")
+    };
+    args.url.clone().join(&url_path).expect("join url failed")
 }
 
 async fn again<T, Fut, F: Fn() -> Fut>(f: F, retry: usize) -> Result<T>
