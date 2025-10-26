@@ -490,7 +490,7 @@ pub async fn stage4(
     local_sizedb: Option<&sled::Db>,
     remote_sizedb: Option<&sled::Db>,
 ) -> Result<(), Stage4Error> {
-    let extension = args.extension.as_ref().map(|x| x.build());
+    let extension = args.extension.as_ref().map(|x| x.build(args));
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
     let max = args.size_limit;
 
@@ -611,7 +611,7 @@ pub async fn stage4(
         download_error_cnt: &mut usize,
     ) -> Result<(), Stage4Error> {
         if seen.insert(remote_item.path.clone()) {
-            let download_state = download_file(args, &remote_item, client).await;
+            let download_state = download_file(args, &remote_item, client, extension).await;
             match download_state {
                 Ok(actual_size) => {
                     if args.dry_run {

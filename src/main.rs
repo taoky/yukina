@@ -377,6 +377,7 @@ async fn download_file(
     args: &Cli,
     item: &NormalizedVoteItem,
     client: &reqwest::Client,
+    extension: &Option<Box<dyn crate::extension::Extension>>,
 ) -> Result<usize> {
     if item.stats.exists_local {
         tracing::warn!("item is marked as exists_local, skipping download");
@@ -403,6 +404,7 @@ async fn download_file(
         path: &str,
         url: &str,
         client: &reqwest::Client,
+        extension: &Option<Box<dyn crate::extension::Extension>>,
     ) -> Result<usize> {
         let resp = client.get(url).send().await?.error_for_status()?;
         let total_size = resp.content_length();
@@ -448,10 +450,22 @@ async fn download_file(
             }
         }
         let target_path = args.repo_path.join(path);
+        if let Some(ext) = extension {
+            if let Err(e) = ext.post_process_downloaded_file(args, &tmp_path) {
+                tracing::warn!("Post-process downloaded file failed: {}", e);
+                std::fs::remove_file(&tmp_path)?;
+                return Err(e);
+            }
+        }
         std::fs::rename(&tmp_path, &target_path)?;
         Ok(std::fs::metadata(&target_path)?.len() as usize)
     }
-    match again(|| download(args, path, url.as_str(), client), args.retry).await {
+    match again(
+        || download(args, path, url.as_str(), client, extension),
+        args.retry,
+    )
+    .await
+    {
         Ok(filesize) => {
             tracing::info!("Downloaded: {} -> {:?}", url, args.repo_path.join(path));
             Ok(filesize)

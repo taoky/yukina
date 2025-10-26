@@ -167,7 +167,7 @@ Options:
       --retry <RETRY>
           Retry count for each request [default: 3]
       --extension <EXTENSION>
-          Extension for specific repo types [possible values: nix-channels]
+          Extension for specific repo types [possible values: nix-channels, freebsd-pkg]
       --aggressive-removal
           Aggressively remove all files not accessed during log_duration, instead of just keep it within threshold
       --gc-only
