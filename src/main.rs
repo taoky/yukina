@@ -144,6 +144,10 @@ struct Cli {
     /// If not set, use combined log format (the default of nginx)
     #[clap(long, value_enum, default_value_t = LogFormat::Combined)]
     log_format: LogFormat,
+
+    /// Don't ignore browser UA when statistics collecting and voting
+    #[clap(long)]
+    include_browser_ua: bool,
 }
 
 enum LogFileType {

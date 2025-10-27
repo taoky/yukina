@@ -45,6 +45,9 @@ fn process_logitem(
     if duration > TimeDelta::from_std(*args.log_duration).unwrap() {
         return true;
     }
+    if args.include_browser_ua == false && item.user_agent.starts_with("Mozilla") {
+        return false;
+    }
     let client_prefix = get_ip_prefix_string(item.client);
     let ip_prefix_url = IpPrefixUrl {
         ip_prefix: client_prefix,
