@@ -34,6 +34,7 @@ filetime = "0.2.23"
 percent-encoding = "2.3.1"
 serde_json = "1.0.145"
 phf = { version = "0.13.1", features = ["macros"] }
+rusqlite = "0.37.0"
 
 [dev-dependencies]
 test-log = { version = "0.2.14", default-features = false, features = ["trace"] }

@@ -2,6 +2,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod contrib;
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RemoteSizeDBItem {
     pub size: Option<u64>,

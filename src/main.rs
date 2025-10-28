@@ -24,6 +24,7 @@ use shadow_rs::shadow;
 shadow!(build);
 
 mod bar;
+mod db;
 mod extension;
 mod parser;
 mod stages;
