@@ -60,6 +60,7 @@ jobs:
         artifacts: |
           target/x86_64-unknown-linux-musl/release/yukina
           target/x86_64-unknown-linux-musl/release/kv
+          target/x86_64-unknown-linux-musl/release/sled2sqlite
     - name: Deploy - Put it in artifact (if not a tag)
       if: false == startsWith(github.ref, 'refs/tags/')
       uses: actions/upload-artifact@v4
@@ -68,6 +69,7 @@ jobs:
         path: |
           target/x86_64-unknown-linux-musl/release/yukina
           target/x86_64-unknown-linux-musl/release/kv
+          target/x86_64-unknown-linux-musl/release/sled2sqlite
     - name: Release to crates.io
       if: startsWith(github.ref, 'refs/tags/')
       uses: katyo/publish-crates@v2
