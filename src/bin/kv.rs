@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
-use yukina::{db_get, LocalSizeDBItem, RemoteSizeDBItem};
+use yukina::{db, db_get, LocalSizeDBItem, RemoteSizeDBItem};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -57,7 +57,7 @@ fn main() {
     let args = Cli::parse();
     match args.command {
         Commands::Get(args) => {
-            let db = sled::open(args.db).unwrap();
+            let db = db::Db::open(args.db).unwrap();
             let value = match args.r#type {
                 Type::Remote => {
                     TypeResult::Remote(db_get::<RemoteSizeDBItem>(Some(&db), &args.key).unwrap())
@@ -69,13 +69,13 @@ fn main() {
             println!("{:?}", value);
         }
         Commands::Remove(args) => {
-            let db = sled::open(args.db).unwrap();
+            let db = db::Db::open(args.db).unwrap();
             db.remove(&args.key).unwrap();
         }
         Commands::Scan(args) => {
-            let db = sled::open(args.db).unwrap();
+            let db = db::Db::open(args.db).unwrap();
             let scan_prefix = args.scan_prefix;
-            let mut iter = db.scan_prefix(scan_prefix.as_bytes());
+            let mut iter = db.scan_prefix(&scan_prefix).unwrap();
             while let Some(Ok((key, value))) = iter.next() {
                 let value = match args.r#type {
                     Type::Remote => TypeResult::Remote(
@@ -85,7 +85,7 @@ fn main() {
                         TypeResult::Local(bincode::deserialize::<LocalSizeDBItem>(&value).unwrap())
                     }
                 };
-                println!("{} {:?}", std::str::from_utf8(&key).unwrap(), value);
+                println!("{} {:?}", &key, value);
             }
         }
     }

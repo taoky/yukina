@@ -234,7 +234,7 @@ pub fn stage1(args: &Cli) -> UserVote {
 }
 
 /// Analyse local files and get metadata of files we are interested in
-pub fn stage2(args: &Cli, local_sizedb: Option<&sled::Db>) -> FileStats {
+pub fn stage2(args: &Cli, local_sizedb: Option<&crate::db::Db>) -> FileStats {
     fn get_path_from_walkdir_entry(
         repo_path: &std::path::Path,
         entry: Result<&walkdir::DirEntry, &walkdir::Error>,
@@ -301,7 +301,7 @@ pub async fn stage3(
     vote: &UserVote,
     stats: &FileStats,
     client: &reqwest::Client,
-    remote_sizedb: Option<&sled::Db>,
+    remote_sizedb: Option<&crate::db::Db>,
 ) -> NormalizedVote {
     let mut res = Vec::new();
     let progressbar = get_progress_bar(vote.len() as u64, "Stage 3", None);
@@ -490,8 +490,8 @@ pub async fn stage4(
     normalized_vote: &NormalizedVote,
     stats: &FileStats,
     client: &reqwest::Client,
-    local_sizedb: Option<&sled::Db>,
-    remote_sizedb: Option<&sled::Db>,
+    local_sizedb: Option<&crate::db::Db>,
+    remote_sizedb: Option<&crate::db::Db>,
 ) -> Result<(), Stage4Error> {
     let extension = args.extension.as_ref().map(|x| x.build(args));
     let mut sum = stats.list.iter().map(|(_, size)| *size).sum::<u64>();
@@ -603,8 +603,8 @@ pub async fn stage4(
     async fn download_impl(
         args: &Cli,
         client: &reqwest::Client,
-        local_sizedb: Option<&sled::Db>,
-        remote_sizedb: Option<&sled::Db>,
+        local_sizedb: Option<&crate::db::Db>,
+        remote_sizedb: Option<&crate::db::Db>,
         remote_item: NormalizedVoteItem,
         remote_size: u64,
         seen: &mut HashSet<String>,

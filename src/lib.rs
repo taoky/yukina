@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod contrib;
+pub mod db;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RemoteSizeDBItem {
@@ -27,7 +28,7 @@ impl From<usize> for LocalSizeDBItem {
     }
 }
 
-pub fn db_get<T>(db: Option<&sled::Db>, key: &str) -> anyhow::Result<T>
+pub fn db_get<T>(db: Option<&db::Db>, key: &str) -> anyhow::Result<T>
 where
     T: serde::de::DeserializeOwned + Default,
 {
@@ -42,18 +43,18 @@ where
     }
 }
 
-pub fn db_set<T>(db: Option<&sled::Db>, key: &str, value: T) -> anyhow::Result<()>
+pub fn db_set<T>(db: Option<&db::Db>, key: &str, value: T) -> anyhow::Result<()>
 where
     T: serde::Serialize,
 {
     if let Some(db) = db {
         let value = bincode::serialize(&value)?;
-        db.insert(key, value)?;
+        db.insert(key, &value)?;
     }
     Ok(())
 }
 
-pub fn db_remove(db: Option<&sled::Db>, key: &str) -> anyhow::Result<()> {
+pub fn db_remove(db: Option<&db::Db>, key: &str) -> anyhow::Result<()> {
     if let Some(db) = db {
         db.remove(key)?;
     }

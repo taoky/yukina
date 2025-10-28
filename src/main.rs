@@ -15,16 +15,15 @@ use std::{
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
-use tracing::{level_filters::LevelFilter, warn};
+use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use yukina::{db_remove, db_set, RemoteSizeDBItem};
+use yukina::{db, db_remove, db_set, RemoteSizeDBItem};
 
 use shadow_rs::shadow;
 shadow!(build);
 
 mod bar;
-mod db;
 mod extension;
 mod parser;
 mod stages;
@@ -308,7 +307,7 @@ impl Ord for VoteValue {
     }
 }
 
-fn insert_remotedb(db: Option<&sled::Db>, key: &str, size: Option<u64>) {
+fn insert_remotedb(db: Option<&db::Db>, key: &str, size: Option<u64>) {
     if let Some(db) = db {
         let size_item = RemoteSizeDBItem {
             size,
@@ -354,7 +353,7 @@ where
 fn remove_file(
     args: &Cli,
     item: &NormalizedVoteItem,
-    local_db: Option<&sled::Db>,
+    local_db: Option<&db::Db>,
 ) -> Result<(), std::io::Error> {
     let path = &item.path;
     let full_path = args.repo_path.join(path);
@@ -490,16 +489,27 @@ async fn download_file(
     }
 }
 
-fn open_db(path: Option<&PathBuf>) -> Option<sled::Db> {
+fn open_db(path: Option<&PathBuf>) -> Option<db::Db> {
     if let Some(sd_path) = &path {
-        let db = sled::open(sd_path);
+        if sd_path.is_dir() {
+            let sd_path_tmp = sd_path.join(".new");
+            // do migration
+            info!("sled2sqlite migration: {:?} -> {:?}", sd_path, sd_path_tmp);
+            yukina::contrib::sled2sqlite::sled2sqlite(sd_path, &sd_path_tmp, None, 1000, true)
+                .expect("sled2sqlite migration failed");
+            std::fs::rename(sd_path, sd_path.with_extension("bak"))
+                .expect("rename old sled db failed");
+            std::fs::rename(&sd_path_tmp, sd_path).expect("rename sled2sqlite failed");
+            info!("sled2sqlite migration done. You can remove the backup at {:?} if everything works fine.", sd_path.with_extension("bak"));
+        }
+        let db = db::Db::open(sd_path);
         let db = match db {
             Ok(db) => db,
             Err(e) => {
                 tracing::warn!("Open size database failed: {}", e);
                 tracing::warn!("Remove and try again...");
                 let _ = std::fs::remove_file(sd_path);
-                sled::open(sd_path).expect("open failed when tried again")
+                db::Db::open(sd_path).expect("open failed when tried again")
             }
         };
         tracing::info!("Size database opened: {:?}", sd_path);
