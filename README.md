@@ -223,7 +223,7 @@ log_format mirror_json escape=json '{'
     '}';
 ```
 
-`kv` is a very simple wrapper around `sled` (same as the version yukina uses). KV tool:
+`kv` is a very simple wrapper inspecting the sqlite db yukina uses ~~around `sled` (same as the version yukina uses)~~. KV tool:
 
 ```console
 $ cargo run --bin kv -- --help
