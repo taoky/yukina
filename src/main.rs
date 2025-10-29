@@ -12,7 +12,7 @@ use std::{
     fs::create_dir_all,
     io::Write,
     net::IpAddr,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
 use tracing::{info, level_filters::LevelFilter, warn};
@@ -489,15 +489,22 @@ async fn download_file(
     }
 }
 
+fn add_suffix(path: &Path, suffix: &str) -> PathBuf {
+    assert!(suffix.starts_with('.'));
+    let mut name = path.file_name().unwrap().to_os_string();
+    name.push(suffix);
+    path.with_file_name(name)
+}
+
 fn open_db(path: Option<&PathBuf>) -> Option<db::Db> {
     if let Some(sd_path) = &path {
         if sd_path.is_dir() {
-            let sd_path_tmp = sd_path.join(".new");
+            let sd_path_tmp = add_suffix(sd_path, ".new");
             // do migration
             info!("sled2sqlite migration: {:?} -> {:?}", sd_path, sd_path_tmp);
             yukina::contrib::sled2sqlite::sled2sqlite(sd_path, &sd_path_tmp, None, 1000, true)
                 .expect("sled2sqlite migration failed");
-            std::fs::rename(sd_path, sd_path.with_extension("bak"))
+            std::fs::rename(sd_path, add_suffix(sd_path, ".bak"))
                 .expect("rename old sled db failed");
             std::fs::rename(&sd_path_tmp, sd_path).expect("rename sled2sqlite failed");
             info!("sled2sqlite migration done. You can remove the backup at {:?} if everything works fine.", sd_path.with_extension("bak"));
