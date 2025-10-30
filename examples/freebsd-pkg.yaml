@@ -2,7 +2,7 @@ image: ustcmirror/yukina:latest
 envs:
   YUKINA_SIZE_LIMIT: 512g
   YUKINA_FILTER: --filter ^.+/.+/FreeBSD.+\.pkg$ --filter ^.+/.+/All/.+\.pkg$
-  YUKINA_EXTRA: --extension freebsd-pkg
+  YUKINA_EXTRA: --extension freebsd-pkg --download-error-threshold 0
   UPSTREAM: http://pkg.freebsd.org/
 cron: 12 1/1 * * *
 logRotCycle: 50
