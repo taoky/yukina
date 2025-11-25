@@ -22,6 +22,11 @@ location /pypi/web/ {
     rewrite ^/pypi/web/(.*)$ /pypi/$1 permanent;
 }
 
+# Don't normalize these special index files
+location = /pypi/web/simple/index.html {}
+location = /pypi/web/simple/index.v1_html {}
+location = /pypi/web/simple/index.v1_json {}
+
 location ~ ^/pypi/simple/[^/]*([A-Z]|_|\.)[^/]* {
     # local package_name = ngx.var.uri:match("/pypi/simple/(.+)")
     # if package_name and package_name ~= "index.html" then
