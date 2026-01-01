@@ -12,10 +12,10 @@ use std::{
     fs::create_dir_all,
     io::Write,
     net::IpAddr,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
 };
-use tracing::{info, level_filters::LevelFilter, warn};
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use yukina::{db, db_remove, db_set, RemoteSizeDBItem};
@@ -442,7 +442,7 @@ async fn download_file(
         // Make sure tmp_path has parent folder created
         let tmp_parent = tmp_path.parent().unwrap();
         if let Err(e) = create_dir_all(tmp_parent) {
-            warn!("create dir {:?} failed with {}", tmp_parent, e);
+            tracing::warn!("create dir {:?} failed with {}", tmp_parent, e);
         }
         {
             let mut dest_file = std::fs::File::create(&tmp_path)?;
@@ -489,25 +489,11 @@ async fn download_file(
     }
 }
 
-fn add_suffix(path: &Path, suffix: &str) -> PathBuf {
-    assert!(suffix.starts_with('.'));
-    let mut name = path.file_name().unwrap().to_os_string();
-    name.push(suffix);
-    path.with_file_name(name)
-}
-
 fn open_db(path: Option<&PathBuf>) -> Option<db::Db> {
     if let Some(sd_path) = &path {
         if sd_path.is_dir() {
-            let sd_path_tmp = add_suffix(sd_path, ".new");
-            // do migration
-            info!("sled2sqlite migration: {:?} -> {:?}", sd_path, sd_path_tmp);
-            yukina::contrib::sled2sqlite::sled2sqlite(sd_path, &sd_path_tmp, None, 1000, true)
-                .expect("sled2sqlite migration failed");
-            std::fs::rename(sd_path, add_suffix(sd_path, ".bak"))
-                .expect("rename old sled db failed");
-            std::fs::rename(&sd_path_tmp, sd_path).expect("rename sled2sqlite failed");
-            info!("sled2sqlite migration done. You can remove the backup at {:?} if everything works fine.", sd_path.with_extension("bak"));
+            tracing::error!("Please manually use sled2sqlite to convert sled database directory {:?} to sqlite.", sd_path);
+            std::process::exit(1);
         }
         let db = db::Db::open(sd_path);
         let db = match db {
