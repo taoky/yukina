@@ -60,12 +60,14 @@ impl Extension for FreeBSDPkg {
                 for line in reader.lines() {
                     let line = line?;
                     let value: Value = serde_json::from_str(&line)?;
-                    let hash_value = value["sum"]
-                        .as_str()
-                        .context("missing 'sum' in JSON line")?;
-                    let repopath = value["repopath"]
-                        .as_str()
-                        .context("missing 'repopath' in JSON line")?;
+                    let Some(hash_value) = value["sum"].as_str() else {
+                        tracing::debug!("Skipping JSON line without sum: {}", line);
+                        continue;
+                    };  
+                    let Some(repopath) = value["repopath"].as_str() else {
+                        tracing::debug!("Skipping JSON line without repopath: {}", line);
+                        continue;
+                    };
 
                     let repopath_full = packagesite_path.parent().unwrap().join(repopath);
                     self.metadata_path_to_sha256_mapping.insert(
