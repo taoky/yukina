@@ -54,7 +54,7 @@ fn process_logitem(
         url: path.clone(),
     };
     if let Some(last_time) = access_record.get(&ip_prefix_url) {
-        let delta = item.time.signed_duration_since(*last_time);
+        let delta = item.time.signed_duration_since(*last_time).abs();
         if delta.num_seconds() < 60 * 5 {
             return false;
         }
@@ -203,7 +203,7 @@ pub fn stage1(args: &Cli) -> UserVote {
                 &mut miss,
             );
             if stop_iterate_flag {
-                break;
+                continue;
             }
         }
 
