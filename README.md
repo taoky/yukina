@@ -194,6 +194,12 @@ Options:
           Error threshold for download. If the number of download errors exceeds this threshold, yukina will exit with error code 1. Setting this to 0 will disable this early exit behavior [default: 5]
       --log-format <LOG_FORMAT>
           Format of the log file If not set, use combined log format (the default of nginx) [default: combined] [possible values: combined, mirror-json]
+      --include-browser-ua
+          Don't ignore browser UA when statistics collecting and voting
+      --include-bad-bot-ua
+          Don't ignore known bad bot UA when statistics collecting and voting
+      --output-stats
+          Append current stats to repo_path/.yukina_stats.log, for public cosumption
   -h, --help
           Print help
   -V, --version
@@ -203,7 +209,6 @@ Options:
 "Extension" is a special option for specific repo types:
 
 - nix-channels: This extension would parse narinfo file and add the blob urls to the download list.
-- freebsd-pkg: This extension would parse packagesite.txz, check downloaded files sha256, and create hard links to .by-hash folder to keep compatibility with our sync script.
 
 "Log format" option is used to specify the format of your nginx access log. "mirror-json" is configured like this:
 
