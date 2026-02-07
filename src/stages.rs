@@ -17,6 +17,12 @@ use crate::{
     NormalizedVoteItem, UserVote, VoteValue,
 };
 
+fn is_bad_bot(ua: &str) -> bool {
+    let ua = ua.to_ascii_lowercase();
+    ua.contains("curl") || ua.contains("wget") || ua.contains("python-requests/") ||
+    ua.contains("bandersnatch")  // don't include sync clients
+}
+
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct IpPrefixUrl {
     ip_prefix: String,
@@ -46,6 +52,9 @@ fn process_logitem(
         return true;
     }
     if !args.include_browser_ua && item.user_agent.starts_with("Mozilla") {
+        return false;
+    }
+    if !args.include_bad_bot_ua && is_bad_bot(&item.user_agent) {
         return false;
     }
     let client_prefix = get_ip_prefix_string(item.client);

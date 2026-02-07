@@ -149,6 +149,10 @@ struct Cli {
     #[clap(long)]
     include_browser_ua: bool,
 
+    /// Don't ignore known bad bot UA when statistics collecting and voting
+    #[clap(long)]
+    include_bad_bot_ua: bool,
+
     /// Append current stats to repo_path/.yukina_stats.log, for public cosumption
     #[clap(long)]
     output_stats: bool,
