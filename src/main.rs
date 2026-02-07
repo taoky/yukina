@@ -148,6 +148,10 @@ struct Cli {
     /// Don't ignore browser UA when statistics collecting and voting
     #[clap(long)]
     include_browser_ua: bool,
+
+    /// Append current stats to repo_path/.yukina_stats.log, for public cosumption
+    #[clap(long)]
+    output_stats: bool,
 }
 
 enum LogFileType {

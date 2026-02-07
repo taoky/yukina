@@ -3,7 +3,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use core::fmt;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet},
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     time::SystemTime,
 };
 use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
@@ -458,12 +458,35 @@ pub async fn stage3(
         hit_stats.remote_hit,
         hit_stats.remote_miss
     );
-    tracing::info!(
+
+    let hit_info = format!(
         "Local hit with vote: {}, Real miss with vote: {}, Hit rate: {:.2}%",
         hit_stats.local_hit_with_vote,
         hit_stats.real_miss_with_vote,
         get_hit_rate(hit_stats.local_hit_with_vote, hit_stats.real_miss_with_vote)
     );
+    tracing::info!(hit_info);
+    if args.output_stats {
+        let stats_path = args.repo_path.join(".yukina_stats.log");
+        let mut file = match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&stats_path)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::error!("Failed to open stats file {}: {}", stats_path.display(), e);
+                return res;
+            }
+        };
+        if let Err(e) = writeln!(file, "{}", hit_info) {
+            tracing::error!(
+                "Failed to write stats to file {}: {}",
+                stats_path.display(),
+                e
+            );
+        }
+    }
     res
 }
 
