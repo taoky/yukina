@@ -20,10 +20,12 @@ use crate::{
 fn is_bad_bot(ua: &str) -> bool {
     let ua = ua.to_ascii_lowercase();
     if ua.contains("curl/") && ua.contains("nix/") {
-        return false;  // nix client
+        return false; // nix client
     }
-    ua.starts_with("curl/") || ua.starts_with("wget/") || ua.starts_with("python-requests/") ||
-    ua.starts_with("bandersnatch")  // don't include sync clients
+    ua.starts_with("curl/")
+        || ua.starts_with("wget/")
+        || ua.starts_with("python-requests/")
+        || ua.starts_with("bandersnatch") // don't include sync clients
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
@@ -108,7 +110,7 @@ fn process_logitem(
     }
     let vote = vote.entry(path.to_owned()).or_default();
     vote.count += 1;
-    if (item.status == 200 || item.status == 206) && !item.proxied {
+    if (item.status == 200 || item.status == 206 || item.status == 304) && !item.proxied {
         vote.success_count += 1;
         *hit += 1;
     } else if item.status == 302 || item.status == 404 || item.proxied {
