@@ -19,8 +19,11 @@ use crate::{
 
 fn is_bad_bot(ua: &str) -> bool {
     let ua = ua.to_ascii_lowercase();
-    ua.contains("curl") || ua.contains("wget") || ua.contains("python-requests/") ||
-    ua.contains("bandersnatch")  // don't include sync clients
+    if ua.contains("curl/") && ua.contains("nix/") {
+        return false;  // nix client
+    }
+    ua.starts_with("curl/") || ua.starts_with("wget/") || ua.starts_with("python-requests/") ||
+    ua.starts_with("bandersnatch")  // don't include sync clients
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
