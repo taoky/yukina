@@ -479,7 +479,7 @@ pub async fn stage3(
         hit_stats.real_miss_with_vote,
         get_hit_rate(hit_stats.local_hit_with_vote, hit_stats.real_miss_with_vote)
     );
-    tracing::info!(hit_info);
+    tracing::info!("{}", hit_info);
     if args.output_stats {
         let stats_path = args.repo_path.join(".yukina_stats.log");
         let mut file = match std::fs::OpenOptions::new()
@@ -493,7 +493,8 @@ pub async fn stage3(
                 return res;
             }
         };
-        if let Err(e) = writeln!(file, "{}", hit_info) {
+        let now = Utc::now();
+        if let Err(e) = writeln!(file, "{} {}", now.to_rfc3339(), hit_info) {
             tracing::error!(
                 "Failed to write stats to file {}: {}",
                 stats_path.display(),
