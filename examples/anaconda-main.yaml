@@ -7,10 +7,12 @@ envs:
     --include=/cloud/conda-forge/
     --include=/cloud/conda-forge/*/
     --include=/cloud/conda-forge/*/repodata.json*
+    --exclude=/cloud/conda-forge/.yukina*
     --exclude=/cloud/conda-forge/*/*
     --include=/cloud/bioconda/
     --include=/cloud/bioconda/*/
     --include=/cloud/bioconda/*/repodata.json*
+    --exclude=/cloud/bioconda/.yukina*
     --exclude=/cloud/bioconda/*/*
     --exclude=/cloud/*
     --exclude=archive/Anaconda2* --exclude=miniconda/Miniconda2*
