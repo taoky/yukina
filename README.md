@@ -194,6 +194,8 @@ Options:
           Error threshold for download. If the number of download errors exceeds this threshold, yukina will exit with error code 1. Setting this to 0 will disable this early exit behavior [default: 5]
       --log-format <LOG_FORMAT>
           Format of the log file If not set, use combined log format (the default of nginx) [default: combined] [possible values: combined, mirror-json]
+      --log-suffix <LOG_SUFFIX>
+          Suffix of log file. Yukina would search for "{name}{suffix}.log*" in log_path [default: ""]
       --include-browser-ua
           Don't ignore browser UA when statistics collecting and voting
       --include-bad-bot-ua

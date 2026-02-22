@@ -145,6 +145,11 @@ struct Cli {
     #[clap(long, value_enum, default_value_t = LogFormat::Combined)]
     log_format: LogFormat,
 
+    /// Suffix of log file
+    /// Yukina would search for "{name}{suffix}.log*" in log_path
+    #[clap(long, default_value = "")]
+    log_suffix: String,
+
     /// Don't ignore browser UA when statistics collecting and voting
     #[clap(long)]
     include_browser_ua: bool,

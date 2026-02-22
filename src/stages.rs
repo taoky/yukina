@@ -128,6 +128,7 @@ fn process_logitem(
 
 /// Analyse nginx logs and get user votes
 pub fn stage1(args: &Cli) -> UserVote {
+    let log_prefix = format!("{}{}.log", args.name, args.log_suffix);
     let mut entries: Vec<_> = std::fs::read_dir(&args.log_path)
         .expect("read log path failed")
         .filter_map(|entry| entry.ok())
@@ -136,7 +137,7 @@ pub fn stage1(args: &Cli) -> UserVote {
                 && entry
                     .file_name()
                     .to_str()
-                    .is_some_and(|s| s.starts_with(&format!("{}.log", args.name)))
+                    .is_some_and(|s| s.starts_with(&log_prefix))
         })
         .collect();
     entries.sort_by_cached_key(|entry| {
