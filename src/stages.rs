@@ -553,10 +553,10 @@ pub async fn stage4(
     // for files get no votes, add to to_remove_queue with 0 score
     {
         let to_remove_hs: HashSet<_> = to_remove_queue.iter().map(|x| x.0.path.clone()).collect();
-        for item in stats.list.clone() {
+        for item in stats.list.iter() {
             if !to_remove_hs.contains(&item.0) {
                 to_remove_queue.push(std::cmp::Reverse(NormalizedVoteItem {
-                    path: item.0,
+                    path: item.0.clone(),
                     stats: NormalizedFileStats {
                         score: 0.0,
                         original_score: 0,
