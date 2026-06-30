@@ -2,7 +2,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub mod contrib;
 pub mod db;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
