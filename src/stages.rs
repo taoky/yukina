@@ -349,11 +349,13 @@ pub async fn stage3(
     }
     let mut hit_stats = HitMissStats::default();
 
+    let local_file_map = stats.get_hashmap();
+
     for vote_item in vote {
         progressbar.inc(1);
         let (url_path, vote_value) = vote_item;
         // Check if it exists
-        let (size, exists, valid) = if let Some(value) = stats.hm.get(url_path) {
+        let (size, exists, valid) = if let Some(value) = local_file_map.get(url_path.as_str()) {
             tracing::debug!("File exists: {} ({})", url_path, value);
             hit_stats.local_hit += 1;
             hit_stats.update_with_vote(vote_value);

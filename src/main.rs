@@ -289,13 +289,15 @@ fn normalize_vote(vote_count: u64, size: u64) -> f64 {
 /// Paths in the struct are all relative to the repo root
 struct FileStats {
     list: Vec<(String, u64)>,
-    hm: HashMap<String, u64>,
 }
 
 impl FileStats {
     fn new(list: Vec<(String, u64)>) -> Self {
-        let hm = list.iter().cloned().collect();
-        Self { list, hm }
+        Self { list }
+    }
+
+    fn get_hashmap(&self) -> HashMap<&str, u64> {
+        self.list.iter().map(|(p, s)| (p.as_str(), *s)).collect()
     }
 }
 
