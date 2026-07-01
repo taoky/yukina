@@ -154,7 +154,6 @@ pub fn stage1(args: &Cli) -> UserVote {
     let now_utc = chrono::Utc::now();
     let combined_parser = get_log_parser(args.log_format);
 
-    let mut access_record: HashMap<IpPrefixUrl, DateTime<Utc>> = HashMap::new();
     let mut vote: HashMap<String, VoteValue> = HashMap::new();
 
     let mut stop_iterate_flag = false;
@@ -173,6 +172,9 @@ pub fn stage1(args: &Cli) -> UserVote {
         let filename = entry.file_name();
         let filename = filename.to_str().unwrap();
         tracing::info!("Processing {}", filename);
+        // We don't record cross-file accesses, as currently it seems unnecessary for 5-min gap,
+        // and the memory cost of storing all logs is a bit too high.
+        let mut access_record: HashMap<IpPrefixUrl, DateTime<Utc>> = HashMap::new();
         // decide whether directly read the file, or use a decompressor
         let filetype = deduce_log_file_type(filename);
 
