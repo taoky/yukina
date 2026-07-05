@@ -25,7 +25,8 @@ fn is_bad_bot(ua: &str) -> bool {
     ua.starts_with("curl/")
         || ua.starts_with("wget/")
         || ua.starts_with("python-requests/")
-        || ua.starts_with("bandersnatch") // don't include sync clients
+        || ua.starts_with("bandersnatch")
+        || ua.starts_with("shadowmire") // don't include sync clients
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
