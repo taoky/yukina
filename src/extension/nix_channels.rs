@@ -11,7 +11,7 @@ pub struct NixChannels {
 impl Default for NixChannels {
     fn default() -> Self {
         Self {
-            valid_narurl_regex: regex::Regex::new(r"nar/[a-z0-9]+\.nar\.(xz|gz|lz)").unwrap(),
+            valid_narurl_regex: regex::Regex::new(r"nar/[a-z0-9]+\.nar\.(xz|gz|lz|zst)").unwrap(),
         }
     }
 }

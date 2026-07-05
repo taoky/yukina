@@ -680,14 +680,21 @@ pub async fn stage4(
                     }
                     // Run extension and push to download queue
                     if let Some(ext) = &extension {
-                        if let Ok(res) = ext.parse_downloaded_file(args, &remote_item, client) {
-                            if let Some(new_item) = res {
-                                let new_item = new_item.clone();
-                                tracing::info!("Extension {} result: {:?}", ext.name(), new_item);
-                                to_download_queue.push(new_item);
+                        match ext.parse_downloaded_file(args, &remote_item, client) {
+                            Ok(res) => {
+                                if let Some(new_item) = res {
+                                    let new_item = new_item.clone();
+                                    tracing::info!(
+                                        "Extension {} result: {:?}",
+                                        ext.name(),
+                                        new_item
+                                    );
+                                    to_download_queue.push(new_item);
+                                }
                             }
-                        } else {
-                            tracing::warn!("Extension {} error: {:?}", ext.name(), remote_item);
+                            Err(e) => {
+                                tracing::warn!("Extension {} error {e}: {:?}", ext.name(), remote_item)
+                            }
                         }
                     }
                 }
