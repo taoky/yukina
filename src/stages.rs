@@ -1,5 +1,6 @@
 use anyhow::Result;
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Days, TimeDelta, Utc};
+use clickhouse::{sql::Identifier, Row};
 use core::fmt;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet},
@@ -13,7 +14,7 @@ use crate::{
     get_progress_bar, head_file, insert_remotedb, log_uri_normalize, matches_filter,
     normalize_vote,
     parser::{get_log_parser, LogItem},
-    remove_file, Cli, FileStats, LogFileType, NormalizedFileStats, NormalizedVote,
+    remove_file, Cli, FileStats, LogFileType, LogSource, NormalizedFileStats, NormalizedVote,
     NormalizedVoteItem, UserVote, VoteValue,
 };
 
@@ -127,10 +128,43 @@ fn process_logitem(
     false
 }
 
-/// Analyse nginx logs and get user votes
-pub fn stage1(args: &Cli) -> UserVote {
+/// Analyse access logs and get user votes.
+pub async fn stage1(args: &Cli) -> Result<UserVote> {
+    match args.log_source {
+        LogSource::File => Ok(stage1_file(args)),
+        LogSource::Clickhouse => stage1_clickhouse(args).await,
+    }
+}
+
+fn finish_vote_report(
+    vote: HashMap<String, VoteValue>,
+    hit: usize,
+    miss: usize,
+    source: &str,
+) -> UserVote {
+    let mut vote: Vec<_> = vote.into_iter().collect();
+    vote.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
+
+    let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
+    tracing::info!(
+        "Got {} votes, total (existing) size {}",
+        vote.len(),
+        humansize::format_size(total_size, humansize::BINARY)
+    );
+    tracing::info!(
+        "(From {}) Hit: {}, Miss: {}, Estimated Hit rate: {:.2}%",
+        source,
+        hit,
+        miss,
+        get_hit_rate(hit, miss)
+    );
+    vote
+}
+
+fn stage1_file(args: &Cli) -> UserVote {
     let log_prefix = format!("{}{}.log", args.name, args.log_suffix);
-    let mut entries: Vec<_> = std::fs::read_dir(&args.log_path)
+    let log_path = args.log_path.as_ref().expect("--log-path is required");
+    let mut entries: Vec<_> = std::fs::read_dir(log_path)
         .expect("read log path failed")
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
@@ -231,24 +265,117 @@ pub fn stage1(args: &Cli) -> UserVote {
         }
     }
 
-    // Get sorted vote "report".
-    let mut vote: Vec<_> = vote.into_iter().collect();
-    vote.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
+    finish_vote_report(vote, hit, miss, "nginx log")
+}
 
-    let total_size = vote.iter().map(|(_, v)| v.resp_size).sum::<u64>();
-    tracing::info!(
-        "Got {} votes, total (existing) size {}",
-        vote.len(),
-        humansize::format_size(total_size, humansize::BINARY)
-    );
-    tracing::info!(
-        "(From nginx log) Hit: {}, Miss: {}, Estimated Hit rate: {:.2}%",
-        hit,
-        miss,
-        get_hit_rate(hit, miss)
-    );
+#[derive(Debug, Clone, PartialEq, Row, serde::Deserialize, serde::Serialize)]
+struct ClickhouseLogRow {
+    timestamp: f64,
+    clientip: String,
+    url: String,
+    status: u16,
+    size: u64,
+    user_agent: String,
+    proxied: String,
+}
 
-    vote
+impl TryFrom<ClickhouseLogRow> for LogItem {
+    type Error = anyhow::Error;
+
+    fn try_from(row: ClickhouseLogRow) -> Result<Self> {
+        let secs = row.timestamp.trunc() as i64;
+        let mut nsecs = ((row.timestamp - secs as f64) * 1_000_000_000.0) as u32;
+        let secs = if nsecs == 1_000_000_000 {
+            nsecs = 0;
+            secs + 1
+        } else {
+            secs
+        };
+        let time = DateTime::from_timestamp(secs, nsecs)
+            .ok_or_else(|| anyhow::anyhow!("invalid ClickHouse timestamp: {}", row.timestamp))?;
+        Ok(LogItem {
+            client: row.clientip.parse()?,
+            time: time.into(),
+            url: row.url,
+            size: row.size,
+            status: row.status,
+            user_agent: row.user_agent,
+            proxied: row.proxied != "0",
+        })
+    }
+}
+
+async fn stage1_clickhouse(args: &Cli) -> Result<UserVote> {
+    let endpoint = args
+        .clickhouse_url
+        .as_ref()
+        .expect("--clickhouse-url is required")
+        .as_str();
+    let password = std::env::var("YUKINA_CLICKHOUSE_PASSWORD").unwrap_or_default();
+    let client = clickhouse::Client::default()
+        .with_url(endpoint)
+        .with_user(&args.clickhouse_user)
+        .with_password(password)
+        .with_database(&args.clickhouse_database);
+
+    stage1_clickhouse_with_client(args, &client, Utc::now()).await
+}
+
+async fn stage1_clickhouse_with_client(
+    args: &Cli,
+    client: &clickhouse::Client,
+    now_utc: DateTime<Utc>,
+) -> Result<UserVote> {
+    let cutoff = now_utc - TimeDelta::from_std(*args.log_duration)?;
+    let mut range_end = now_utc;
+    let mut vote = HashMap::new();
+    let mut hit = 0;
+    let mut miss = 0;
+
+    while range_end > cutoff {
+        let midnight = range_end
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .expect("midnight is valid")
+            .and_utc();
+        let day_start = if midnight == range_end {
+            midnight.checked_sub_days(Days::new(1)).expect("valid date")
+        } else {
+            midnight
+        };
+        let range_start = day_start.max(cutoff);
+        tracing::info!(
+            "Querying ClickHouse logs from {} to {}",
+            range_start,
+            range_end
+        );
+
+        let mut cursor = client
+            .query(
+                "SELECT ?fields FROM ? WHERE repo = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC",
+            )
+            .bind(Identifier(&args.clickhouse_table))
+            .bind(&args.name)
+            .bind(range_start.timestamp_millis() as f64 / 1000.0)
+            .bind(range_end.timestamp_millis() as f64 / 1000.0)
+            .fetch::<ClickhouseLogRow>()?;
+        let mut access_record = HashMap::new();
+        while let Some(row) = cursor.next().await? {
+            let item = LogItem::try_from(row)?;
+            process_logitem(
+                args,
+                item,
+                &mut vote,
+                &mut access_record,
+                now_utc,
+                &mut hit,
+                &mut miss,
+            );
+        }
+        range_end = range_start;
+    }
+
+    Ok(finish_vote_report(vote, hit, miss, "ClickHouse"))
 }
 
 /// Analyse local files and get metadata of files we are interested in
@@ -693,7 +820,11 @@ pub async fn stage4(
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!("Extension {} error {e}: {:?}", ext.name(), remote_item)
+                                tracing::warn!(
+                                    "Extension {} error {e}: {:?}",
+                                    ext.name(),
+                                    remote_item
+                                )
                             }
                         }
                     }
@@ -784,6 +915,116 @@ pub async fn stage4(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    fn clickhouse_args(log_duration: &str) -> Cli {
+        Cli::try_parse_from([
+            "yukina",
+            "--name",
+            "test",
+            "--log-source",
+            "clickhouse",
+            "--clickhouse-url",
+            "http://localhost:8123",
+            "--repo-path",
+            "/tmp",
+            "--size-limit",
+            "1g",
+            "--url",
+            "https://example.com/",
+            "--log-duration",
+            log_duration,
+        ])
+        .unwrap()
+    }
+
+    #[test]
+    fn clickhouse_row_converts_to_log_item() {
+        let item = LogItem::try_from(ClickhouseLogRow {
+            timestamp: 1_761_247_176.709,
+            clientip: "2001:db8::1".into(),
+            url: "/test/file".into(),
+            status: 200,
+            size: 42,
+            user_agent: "client".into(),
+            proxied: "1".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            item.client,
+            "2001:db8::1".parse::<std::net::IpAddr>().unwrap()
+        );
+        assert_eq!(item.url, "/test/file");
+        assert_eq!(item.status, 200);
+        assert_eq!(item.size, 42);
+        assert!(item.proxied);
+    }
+
+    #[tokio::test]
+    async fn clickhouse_rows_use_shared_vote_logic() {
+        let args = clickhouse_args("1h");
+        let now = DateTime::from_timestamp(1_761_247_200, 0).unwrap();
+        let mock = clickhouse::test::Mock::new();
+        let client = clickhouse::Client::default().with_mock(&mock);
+        mock.add(clickhouse::test::handlers::provide([
+            ClickhouseLogRow {
+                timestamp: 1_761_247_000.0,
+                clientip: "192.0.2.1".into(),
+                url: "/test/file-a".into(),
+                status: 200,
+                size: 100,
+                user_agent: "client".into(),
+                proxied: "0".into(),
+            },
+            // Suppressed because this is the same client prefix and URL within five minutes.
+            ClickhouseLogRow {
+                timestamp: 1_761_247_100.0,
+                clientip: "192.0.2.1".into(),
+                url: "/test/file-a".into(),
+                status: 404,
+                size: 10,
+                user_agent: "client".into(),
+                proxied: "0".into(),
+            },
+            ClickhouseLogRow {
+                timestamp: 1_761_247_150.0,
+                clientip: "2001:db8::1".into(),
+                url: "/test/file-b".into(),
+                status: 200,
+                size: 200,
+                user_agent: "client".into(),
+                proxied: "1".into(),
+            },
+        ]));
+
+        let vote = stage1_clickhouse_with_client(&args, &client, now)
+            .await
+            .unwrap();
+        let vote: HashMap<_, _> = vote.into_iter().collect();
+        let file_a = vote.get("file-a").unwrap();
+        assert_eq!(file_a.count, 1);
+        assert_eq!(file_a.success_count, 1);
+        assert_eq!(file_a.reject_count, 0);
+        let file_b = vote.get("file-b").unwrap();
+        assert_eq!(file_b.count, 1);
+        assert_eq!(file_b.success_count, 0);
+        assert_eq!(file_b.reject_count, 1);
+    }
+
+    #[tokio::test]
+    async fn clickhouse_query_failure_is_fatal() {
+        let args = clickhouse_args("1h");
+        let now = DateTime::from_timestamp(1_761_247_200, 0).unwrap();
+        let mock = clickhouse::test::Mock::new();
+        let client = clickhouse::Client::default().with_mock(&mock);
+        mock.add(clickhouse::test::handlers::failure(
+            clickhouse::test::status::UNAUTHORIZED,
+        ));
+
+        assert!(stage1_clickhouse_with_client(&args, &client, now)
+            .await
+            .is_err());
+    }
 
     #[test]
     fn test_binaryheap_order_correct() {

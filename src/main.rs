@@ -2,7 +2,7 @@
 use anyhow::Result;
 use bar::get_progress_bar;
 use chrono::Utc;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures_util::{stream::StreamExt, Future};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use parse_size::parse_size;
@@ -63,9 +63,29 @@ struct Cli {
     #[clap(long)]
     name: String,
 
-    /// Directory of nginx log
+    /// Source from which access logs are read
+    #[clap(long, value_enum, default_value_t = LogSource::File)]
+    log_source: LogSource,
+
+    /// Directory of nginx logs (required for --log-source file)
     #[clap(long)]
-    log_path: PathBuf,
+    log_path: Option<PathBuf>,
+
+    /// ClickHouse HTTP(S) endpoint (required for --log-source clickhouse)
+    #[clap(long)]
+    clickhouse_url: Option<Url>,
+
+    /// ClickHouse user
+    #[clap(long, default_value = "default")]
+    clickhouse_user: String,
+
+    /// ClickHouse database containing the access-log table
+    #[clap(long, default_value = "mirrors")]
+    clickhouse_database: String,
+
+    /// ClickHouse access-log table
+    #[clap(long, default_value = "access_log")]
+    clickhouse_table: String,
 
     /// Directory of repo
     #[clap(long)]
@@ -161,6 +181,38 @@ struct Cli {
     /// Append current stats to repo_path/.yukina_stats.log, for public cosumption
     #[clap(long)]
     output_stats: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+enum LogSource {
+    File,
+    Clickhouse,
+}
+
+impl Cli {
+    fn validate(self) -> std::result::Result<Self, clap::Error> {
+        let missing = match self.log_source {
+            LogSource::File if self.log_path.is_none() => Some("--log-path"),
+            LogSource::Clickhouse if self.clickhouse_url.is_none() => Some("--clickhouse-url"),
+            _ => None,
+        };
+        if let Some(option) = missing {
+            return Err(clap::Error::raw(
+                clap::error::ErrorKind::MissingRequiredArgument,
+                format!("{option} is required for --log-source {}", self.log_source),
+            ));
+        }
+        Ok(self)
+    }
+}
+
+impl std::fmt::Display for LogSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File => f.write_str("file"),
+            Self::Clickhouse => f.write_str("clickhouse"),
+        }
+    }
 }
 
 enum LogFileType {
@@ -573,7 +625,7 @@ async fn main() {
         None => None,
     };
 
-    let args = Cli::parse();
+    let args = Cli::parse().validate().unwrap_or_else(|e| e.exit());
     tracing::debug!("{:?}", args);
 
     let client = reqwest::Client::builder()
@@ -589,7 +641,13 @@ async fn main() {
     // change cwd
     std::env::set_current_dir(&args.repo_path).expect("change cwd failed");
 
-    let vote = stage1(&args);
+    let vote = match stage1(&args).await {
+        Ok(vote) => vote,
+        Err(e) => {
+            tracing::error!("Read access logs failed: {e:#}");
+            std::process::exit(1);
+        }
+    };
     let stats = stage2(&args, local_sizedb.as_ref());
     let normalized_vote = stage3(&args, &vote, &stats, &client, remote_sizedb.as_ref()).await;
     let result = stage4(
@@ -622,6 +680,59 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn required_args() -> Vec<&'static str> {
+        vec![
+            "yukina",
+            "--name",
+            "test",
+            "--repo-path",
+            "/tmp",
+            "--size-limit",
+            "1g",
+            "--url",
+            "https://example.com/",
+        ]
+    }
+
+    #[test]
+    fn file_log_source_requires_log_path() {
+        assert!(Cli::try_parse_from(required_args())
+            .and_then(Cli::validate)
+            .is_err());
+        let mut args = required_args();
+        args.extend(["--log-path", "/var/log/nginx"]);
+        assert_eq!(
+            Cli::try_parse_from(args)
+                .unwrap()
+                .validate()
+                .unwrap()
+                .log_source,
+            LogSource::File
+        );
+    }
+
+    #[test]
+    fn clickhouse_source_requires_url_but_not_log_path() {
+        let mut missing_url = required_args();
+        missing_url.extend(["--log-source", "clickhouse"]);
+        assert!(Cli::try_parse_from(missing_url)
+            .and_then(Cli::validate)
+            .is_err());
+
+        let mut args = required_args();
+        args.extend([
+            "--log-source",
+            "clickhouse",
+            "--clickhouse-url",
+            "https://clickhouse.example.com:8443",
+        ]);
+        let args = Cli::try_parse_from(args).unwrap().validate().unwrap();
+        assert_eq!(args.log_source, LogSource::Clickhouse);
+        assert!(args.log_path.is_none());
+        assert_eq!(args.clickhouse_database, "mirrors");
+        assert_eq!(args.clickhouse_table, "access_log");
+    }
 
     #[test]
     fn test_log_uri_normalize() {

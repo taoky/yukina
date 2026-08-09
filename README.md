@@ -149,13 +149,23 @@ See [examples](examples/).
 $ cargo run -- --help
 YUKI-based Next-generation Async-cache
 
-Usage: yukina [OPTIONS] --name <NAME> --log-path <LOG_PATH> --repo-path <REPO_PATH> --size-limit <SIZE_LIMIT> --url <URL>
+Usage: yukina [OPTIONS] --name <NAME> --repo-path <REPO_PATH> --size-limit <SIZE_LIMIT> --url <URL>
 
 Options:
       --name <NAME>
           Repo name, used for finding log file and downloading from remote
+      --log-source <LOG_SOURCE>
+          Source from which access logs are read [default: file] [possible values: file, clickhouse]
       --log-path <LOG_PATH>
-          Directory of nginx log
+          Directory of nginx logs (required for --log-source file)
+      --clickhouse-url <CLICKHOUSE_URL>
+          ClickHouse HTTP(S) endpoint (required for --log-source clickhouse)
+      --clickhouse-user <CLICKHOUSE_USER>
+          ClickHouse user [default: default]
+      --clickhouse-database <CLICKHOUSE_DATABASE>
+          ClickHouse database containing the access-log table [default: mirrors]
+      --clickhouse-table <CLICKHOUSE_TABLE>
+          ClickHouse access-log table [default: access_log]
       --repo-path <REPO_PATH>
           Directory of repo
       --dry-run
@@ -233,6 +243,24 @@ log_format mirror_json escape=json '{'
     '"proto":"$server_protocol",'
     '"proxied":"$proxied"'
     '}';
+```
+
+## ClickHouse log source
+
+Yukina can read mirror JSON access records directly from ClickHouse instead of local nginx log files. The table must provide `timestamp Float64`, `clientip String`, `url String`, `status UInt16`, `size UInt64`, `user_agent String`, `proxied String`, and `repo String` (which may be `LowCardinality`).
+
+The default table is `mirrors.access_log`. Yukina filters `repo` using `--name` and queries only records within `--log-duration`. Set the password through `YUKINA_CLICKHOUSE_PASSWORD`; an unset variable means an empty password.
+
+```console
+$ YUKINA_CLICKHOUSE_PASSWORD='secret' cargo run -- \
+    --name pypi \
+    --log-source clickhouse \
+    --clickhouse-url https://clickhouse.example.com:8443 \
+    --clickhouse-user mirrors \
+    --repo-path /srv/repo/pypi/packages \
+    --size-limit 512g \
+    --url https://example.com/pypi/web/packages/ \
+    --strip-prefix /packages
 ```
 
 `kv` is a very simple wrapper inspecting the sqlite db yukina uses ~~around `sled` (same as the version yukina uses)~~. KV tool:
