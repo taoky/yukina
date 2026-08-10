@@ -242,8 +242,20 @@ fn stage1_file(args: &Cli) -> UserVote {
             }
         };
 
-        for line in bufreader.lines() {
-            let line = line.expect("read line failed");
+        for (lno, line) in bufreader.lines().enumerate() {
+            let line = match line {
+                Ok(line) => line,
+                Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                    tracing::warn!(
+                        "Skipping line {} with invalid data in {}: {}",
+                        lno,
+                        filename,
+                        e
+                    );
+                    continue;
+                }
+                Err(e) => panic!("read line failed: {e}"),
+            };
             let item = combined_parser.parse(&line).expect("parse line failed");
             stop_iterate_flag = process_logitem(
                 args,
