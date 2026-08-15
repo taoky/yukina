@@ -247,7 +247,7 @@ log_format mirror_json escape=json '{'
 
 ## ClickHouse log source
 
-Yukina can read mirror JSON access records directly from ClickHouse instead of local nginx log files. The table must provide `timestamp Float64`, `clientip String`, `url String`, `status UInt16`, `size UInt64`, `user_agent String`, `proxied String`, and `repo String` (which may be `LowCardinality`).
+Yukina can read mirror JSON access records directly from ClickHouse instead of local nginx log files. The table must provide `event_time DateTime64(3, 'UTC')`, `clientip IPv6`, `url String`, `status UInt16`, `size UInt64`, `user_agent String`, `proxied LowCardinality(String)`, and `repo LowCardinality(String)`. IPv4 clients are expected to be stored as IPv4-mapped IPv6 addresses.
 
 The default table is `mirrors.access_log`. Yukina filters `repo` using `--name` and queries only records within `--log-duration`. Set the password through `YUKINA_CLICKHOUSE_PASSWORD`; an unset variable means an empty password.
 

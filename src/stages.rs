@@ -5,6 +5,7 @@ use core::fmt;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet},
     io::{BufRead, BufReader, Write},
+    net::{IpAddr, Ipv6Addr},
     time::SystemTime,
 };
 use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
@@ -282,8 +283,9 @@ fn stage1_file(args: &Cli) -> UserVote {
 
 #[derive(Debug, Clone, PartialEq, Row, serde::Deserialize, serde::Serialize)]
 struct ClickhouseLogRow {
-    timestamp: f64,
-    clientip: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    event_time: DateTime<Utc>,
+    clientip: Ipv6Addr,
     url: String,
     status: u16,
     size: u64,
@@ -295,19 +297,13 @@ impl TryFrom<ClickhouseLogRow> for LogItem {
     type Error = anyhow::Error;
 
     fn try_from(row: ClickhouseLogRow) -> Result<Self> {
-        let secs = row.timestamp.trunc() as i64;
-        let mut nsecs = ((row.timestamp - secs as f64) * 1_000_000_000.0) as u32;
-        let secs = if nsecs == 1_000_000_000 {
-            nsecs = 0;
-            secs + 1
-        } else {
-            secs
-        };
-        let time = DateTime::from_timestamp(secs, nsecs)
-            .ok_or_else(|| anyhow::anyhow!("invalid ClickHouse timestamp: {}", row.timestamp))?;
+        let client = row
+            .clientip
+            .to_ipv4_mapped()
+            .map_or(IpAddr::V6(row.clientip), IpAddr::V4);
         Ok(LogItem {
-            client: row.clientip.parse()?,
-            time: time.into(),
+            client,
+            time: row.event_time.into(),
             url: row.url,
             size: row.size,
             status: row.status,
@@ -364,12 +360,12 @@ async fn stage1_clickhouse_with_client(
 
         let mut cursor = client
             .query(
-                "SELECT ?fields FROM ? WHERE repo = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC",
+                "SELECT ?fields FROM ? WHERE repo = ? AND event_time >= fromUnixTimestamp64Milli(?) AND event_time < fromUnixTimestamp64Milli(?) ORDER BY event_time ASC",
             )
             .bind(Identifier(&args.clickhouse_table))
             .bind(&args.name)
-            .bind(range_start.timestamp_millis() as f64 / 1000.0)
-            .bind(range_end.timestamp_millis() as f64 / 1000.0)
+            .bind(range_start.timestamp_millis())
+            .bind(range_end.timestamp_millis())
             .fetch::<ClickhouseLogRow>()?;
         let mut access_record = HashMap::new();
         while let Some(row) = cursor.next().await? {
@@ -953,8 +949,8 @@ mod tests {
     #[test]
     fn clickhouse_row_converts_to_log_item() {
         let item = LogItem::try_from(ClickhouseLogRow {
-            timestamp: 1_761_247_176.709,
-            clientip: "2001:db8::1".into(),
+            event_time: DateTime::from_timestamp_millis(1_761_247_176_709).unwrap(),
+            clientip: "::ffff:192.0.2.1".parse().unwrap(),
             url: "/test/file".into(),
             status: 200,
             size: 42,
@@ -962,14 +958,12 @@ mod tests {
             proxied: "1".into(),
         })
         .unwrap();
-        assert_eq!(
-            item.client,
-            "2001:db8::1".parse::<std::net::IpAddr>().unwrap()
-        );
+        assert_eq!(item.client, "192.0.2.1".parse::<IpAddr>().unwrap());
         assert_eq!(item.url, "/test/file");
         assert_eq!(item.status, 200);
         assert_eq!(item.size, 42);
         assert!(item.proxied);
+        assert_eq!(item.time.timestamp_millis(), 1_761_247_176_709);
     }
 
     #[tokio::test]
@@ -980,8 +974,8 @@ mod tests {
         let client = clickhouse::Client::default().with_mock(&mock);
         mock.add(clickhouse::test::handlers::provide([
             ClickhouseLogRow {
-                timestamp: 1_761_247_000.0,
-                clientip: "192.0.2.1".into(),
+                event_time: DateTime::from_timestamp(1_761_247_000, 0).unwrap(),
+                clientip: "::ffff:192.0.2.1".parse().unwrap(),
                 url: "/test/file-a".into(),
                 status: 200,
                 size: 100,
@@ -990,8 +984,8 @@ mod tests {
             },
             // Suppressed because this is the same client prefix and URL within five minutes.
             ClickhouseLogRow {
-                timestamp: 1_761_247_100.0,
-                clientip: "192.0.2.1".into(),
+                event_time: DateTime::from_timestamp(1_761_247_100, 0).unwrap(),
+                clientip: "::ffff:192.0.2.1".parse().unwrap(),
                 url: "/test/file-a".into(),
                 status: 404,
                 size: 10,
@@ -999,8 +993,8 @@ mod tests {
                 proxied: "0".into(),
             },
             ClickhouseLogRow {
-                timestamp: 1_761_247_150.0,
-                clientip: "2001:db8::1".into(),
+                event_time: DateTime::from_timestamp(1_761_247_150, 0).unwrap(),
+                clientip: "2001:db8::1".parse().unwrap(),
                 url: "/test/file-b".into(),
                 status: 200,
                 size: 200,
