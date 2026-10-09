@@ -12,11 +12,10 @@ use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
     construct_url, deduce_log_file_type, download_file, get_hit_rate, get_ip_prefix_string,
-    get_progress_bar, head_file, insert_remotedb, log_uri_normalize, matches_filter,
-    normalize_vote,
+    get_progress_bar, insert_remotedb, log_uri_normalize, matches_filter, normalize_vote,
     parser::{get_log_parser, LogItem},
-    remove_file, Cli, FileStats, LogFileType, LogSource, NormalizedFileStats, NormalizedVote,
-    NormalizedVoteItem, UserVote, VoteValue,
+    probe_file, remote_file_size, remove_file, Cli, FileStats, LogFileType, LogSource,
+    NormalizedFileStats, NormalizedVote, NormalizedVoteItem, UserVote, VoteValue,
 };
 
 fn is_bad_bot(ua: &str) -> bool {
@@ -506,7 +505,9 @@ pub async fn stage3(
             // if size_db, require sled first
             let mut size_item: Option<RemoteSizeDBItem> = None;
             let mut exceeded_miss_ttl = false;
-            if let Ok(s) = db_get::<RemoteSizeDBItem>(remote_sizedb, url_path) {
+            if let Some(s) =
+                remote_sizedb.and_then(|db| db_get::<RemoteSizeDBItem>(Some(db), url_path).ok())
+            {
                 if s.size.is_none() {
                     let ttl: std::time::Duration = args.size_database_ttl.into();
                     let duration = Utc::now()
@@ -551,19 +552,21 @@ pub async fn stage3(
                     continue;
                 }
                 let url = construct_url(args, url_path);
-                tracing::debug!("Heading {:?}", url);
-                let res = head_file(args, url.as_str(), client)
+                tracing::debug!("Probing size of {:?}", url);
+                let res = probe_file(args, url.as_str(), client)
                     .await
-                    .expect("head failed");
+                    .expect("size probe failed");
                 tracing::debug!("Response: {:?}", res);
                 match res.error_for_status() {
                     Ok(res) => {
-                        let size = res
-                            .headers()
-                            .get("content-length")
-                            .and_then(|v| v.to_str().ok())
-                            .and_then(|v| v.parse::<u64>().ok())
-                            .unwrap_or(0);
+                        let size = remote_file_size(res.headers());
+                        // GET probes must not consume the response body.
+                        drop(res);
+                        let Some(size) = size else {
+                            tracing::warn!("Unknown remote size, skipping: {}", url_path);
+                            hit_stats.remote_miss += 1;
+                            continue;
+                        };
                         if size == 0 {
                             tracing::warn!("Empty file: {}", url_path);
                         }

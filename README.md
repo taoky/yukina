@@ -169,7 +169,7 @@ Options:
       --repo-path <REPO_PATH>
           Directory of repo
       --dry-run
-          Don't really download or remove anything, just show what would be done. (HEAD requests are still sent.)
+          Don't really download or remove anything, just show what would be done. (Size probe requests are still sent.)
       --log-duration <LOG_DURATION>
           Log items to check. Access log beyond log_duration would be ignored [default: 7d]
       --user-agent <USER_AGENT>
@@ -180,6 +180,8 @@ Options:
           Filter for urls and file paths you interested in (usually blobs of the repo). Relative to repo_path
       --url <URL>
           URL of the remote repo. Still need to give any URL (would not be used) when --gc-only is set
+      --size-request-method <SIZE_REQUEST_METHOD>
+          HTTP method for probing remote file sizes. GET reads response headers without consuming the body [default: head] [possible values: head, get]
       --strip-prefix <STRIP_PREFIX>
           Optional prefix to strip from the path after the repo name. Access URLs must match strip_prefix if set
       --remote-sizedb <REMOTE_SIZEDB>

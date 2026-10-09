@@ -91,7 +91,7 @@ struct Cli {
     #[clap(long)]
     repo_path: PathBuf,
 
-    /// Don't really download or remove anything, just show what would be done. (HEAD requests are still sent.)
+    /// Don't really download or remove anything, just show what would be done. (Size probe requests are still sent.)
     #[clap(long)]
     dry_run: bool,
 
@@ -114,6 +114,10 @@ struct Cli {
     /// URL of the remote repo. Still need to give any URL (would not be used) when --gc-only is set.
     #[clap(long)]
     url: Url,
+
+    /// HTTP method for probing remote file sizes. GET reads response headers without consuming the body.
+    #[clap(long, value_enum, default_value_t = SizeRequestMethod::Head)]
+    size_request_method: SizeRequestMethod,
 
     /// Optional prefix to strip from the path after the repo name. Access URLs must match strip_prefix if set.
     #[clap(long)]
@@ -187,6 +191,12 @@ struct Cli {
 enum LogSource {
     File,
     Clickhouse,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+enum SizeRequestMethod {
+    Head,
+    Get,
 }
 
 impl Cli {
@@ -441,14 +451,27 @@ fn remove_file(
     Ok(())
 }
 
-async fn head_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<reqwest::Response> {
-    match again(|| async { Ok(client.head(url).send().await?) }, args.retry).await {
+async fn probe_file(args: &Cli, url: &str, client: &reqwest::Client) -> Result<reqwest::Response> {
+    let method = match args.size_request_method {
+        SizeRequestMethod::Head => reqwest::Method::HEAD,
+        SizeRequestMethod::Get => reqwest::Method::GET,
+    };
+    match again(
+        || async { Ok(client.request(method.clone(), url).send().await?) },
+        args.retry,
+    )
+    .await
+    {
         Ok(resp) => Ok(resp),
         Err(e) => {
-            tracing::warn!("Head failed: {}", e);
+            tracing::warn!("Size probe failed: {}", e);
             Err(e)
         }
     }
+}
+
+fn remote_file_size(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers.get("content-length")?.to_str().ok()?.parse().ok()
 }
 
 /// Returns actual size of the file. When used with dry_run, returns 0.
@@ -680,6 +703,92 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn size_probes_use_headers_without_waiting_for_body() {
+        use std::{
+            io::{BufRead, BufReader},
+            net::TcpListener,
+            sync::mpsc,
+            time::Duration,
+        };
+
+        BAR_MANAGER.get_or_init(|| kyuri::Manager::new(Duration::from_secs(1)));
+
+        for (method, status, headers, expected) in [
+            ("head", "200 OK", "Content-Length: 42\r\n", Some(42)),
+            ("get", "200 OK", "Content-Length: 42\r\n", Some(42)),
+            ("get", "200 OK", "Transfer-Encoding: chunked\r\n", None),
+            ("get", "404 Not Found", "Content-Length: 42\r\n", None),
+            ("get", "200 OK", "Content-Length: 0\r\n", Some(0)),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url = format!("http://{}/", listener.local_addr().unwrap());
+            let (done, wait) = mpsc::channel();
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = BufReader::new(socket.try_clone().unwrap());
+                let mut request = String::new();
+                reader.read_line(&mut request).unwrap();
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" || line.is_empty() {
+                        break;
+                    }
+                }
+                write!(socket, "HTTP/1.1 {status}\r\n{headers}\r\n").unwrap();
+                socket.flush().unwrap();
+                // Keep the response body unfinished until stage3 has returned.
+                let _ = wait.recv_timeout(Duration::from_secs(5));
+                request
+            });
+            let mut argv = required_args();
+            if method == "get" {
+                argv.extend(["--size-request-method", "get"]);
+            }
+            argv.push("--dry-run");
+            let mut args = Cli::try_parse_from(argv).unwrap();
+            args.url = url.parse().unwrap();
+            let client = reqwest::Client::builder().no_proxy().build().unwrap();
+            let vote = vec![(
+                "file".into(),
+                VoteValue {
+                    count: 2,
+                    ..Default::default()
+                },
+            )];
+            let stats = FileStats::new(vec![]);
+            let result = tokio::time::timeout(
+                Duration::from_secs(2),
+                stage3(&args, &vote, &stats, &client, None),
+            )
+            .await;
+            let _ = done.send(());
+            let request = server.join().unwrap();
+            assert_eq!(
+                request,
+                format!("{} /file HTTP/1.1\r\n", method.to_uppercase())
+            );
+            let result = result.expect("size probe waited for the response body");
+            assert_eq!(result.first().map(|item| item.stats.size), expected);
+        }
+    }
+
+    #[test]
+    fn remote_size_requires_valid_content_length() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(remote_file_size(&headers), None);
+        headers.insert("content-length", "123".parse().unwrap());
+        assert_eq!(remote_file_size(&headers), Some(123));
+        headers.insert("content-length", "invalid".parse().unwrap());
+        assert_eq!(remote_file_size(&headers), None);
+        headers.insert("content-length", "-1".parse().unwrap());
+        assert_eq!(remote_file_size(&headers), None);
+    }
 
     fn required_args() -> Vec<&'static str> {
         vec![
