@@ -137,6 +137,26 @@ location @freebsd_pkg_302 {
     # FreeBSD pkg server only supports HTTP.
     rewrite ^/freebsd-pkg/(.*)$ http://pkg.freebsd.org/$1 redirect;
 }
+
+location /debuginfod/ {
+    access_log /var/log/nginx/cacheproxy/debuginfod.log;
+    access_log /var/log/nginx/cacheproxy/debuginfod_json.log ngx_json;
+    location = /debuginfod/archlinux/ { index nonexist; }
+    location = /debuginfod/ubuntu/ { index nonexist; }
+    location = /debuginfod/debian/ { index nonexist; }
+    try_files $uri $uri/ @debuginfod_302;
+}
+
+location @debuginfod_302 {
+    access_log /var/log/nginx/cacheproxy/debuginfod.log;
+    access_log /var/log/nginx/cacheproxy/debuginfod_json.log ngx_json;
+
+    rewrite ^/debuginfod/ubuntu/(.*)$ https://debuginfod.ubuntu.com/$1 redirect;
+    rewrite ^/debuginfod/debian/(.*)$ https://debuginfod.debian.net/$1 redirect;
+    rewrite ^/debuginfod/archlinux/(.*)$ https://debuginfod.archlinux.org/$1 redirect;
+
+    return 404;
+}
 ```
 
 ## Yuki configuration
