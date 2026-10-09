@@ -15,6 +15,10 @@ impl Db {
         let conn = Connection::open(path)?;
         let db = Db { conn };
         db.init()?;
+        // These databases are rebuildable caches: NORMAL avoids syncing every
+        // commit, at the cost of potentially losing recent writes on power loss.
+        db.conn.pragma_update(None, "journal_mode", "WAL")?;
+        db.conn.pragma_update(None, "synchronous", "NORMAL")?;
         Ok(db)
     }
 
@@ -164,6 +168,43 @@ impl<'conn> Iterator for ScanIter<'conn> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_db_enables_wal_and_normal_on_reopen() -> Result<()> {
+        let dir = std::env::temp_dir().join(format!(
+            "yukina-wal-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("cache.sqlite");
+        // Start with an existing rollback-journal database containing data.
+        {
+            let db = Db {
+                conn: Connection::open(&path)?,
+            };
+            db.init()?;
+            db.insert("existing", b"value")?;
+        }
+        for _ in 0..2 {
+            let db = Db::open(&path)?;
+            let mode: String = db
+                .conn
+                .pragma_query_value(None, "journal_mode", |r| r.get(0))?;
+            let synchronous: i64 = db
+                .conn
+                .pragma_query_value(None, "synchronous", |r| r.get(0))?;
+            assert_eq!(mode, "wal");
+            assert_eq!(synchronous, 1);
+            assert_eq!(db.get("existing")?, Some(b"value".to_vec()));
+            db.insert("new", b"cached")?;
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+        Ok(())
+    }
 
     #[test]
     fn basic_ops() -> Result<()> {
