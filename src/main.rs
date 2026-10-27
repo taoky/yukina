@@ -244,8 +244,8 @@ fn deduce_log_file_type(filename: &str) -> LogFileType {
     }
 }
 
-fn get_ip_prefix_string(ip: IpAddr) -> String {
-    let client_prefix = match ip {
+fn get_ip_prefix(ip: IpAddr) -> IpNetwork {
+    match ip {
         IpAddr::V4(ipv4) => {
             // Assuming a /24 prefix for IPv4
             IpNetwork::V4(Ipv4Network::new(ipv4, 24).unwrap())
@@ -254,8 +254,7 @@ fn get_ip_prefix_string(ip: IpAddr) -> String {
             // Assuming a /48 prefix for IPv6
             IpNetwork::V6(Ipv6Network::new(ipv6, 48).unwrap())
         }
-    };
-    client_prefix.to_string()
+    }
 }
 
 fn matches_filter(url: &str, filter: &[Regex]) -> bool {
@@ -271,7 +270,7 @@ fn matches_filter(url: &str, filter: &[Regex]) -> bool {
 }
 
 fn log_uri_normalize(uri: &str) -> Result<String> {
-    let mut url = {
+    let url = {
         if uri.starts_with("http:") || uri.starts_with("https:") {
             Url::parse(uri)?
         } else {
@@ -281,19 +280,18 @@ fn log_uri_normalize(uri: &str) -> Result<String> {
             Url::parse(&format!("http://example.com{}", uri))?
         }
     };
-    url.set_query(None);
-    url.set_fragment(None);
-    let path = url.path().to_string();
-    let mut path = percent_encoding::percent_decode_str(&path)
+    // path() already excludes the query and fragment.
+    let mut path = percent_encoding::percent_decode_str(url.path())
         .decode_utf8()?
-        .to_string();
-    // replace duplicated slashes until there is no more
-    loop {
-        let new_path = path.replace("//", "/");
-        if new_path == path {
-            break;
-        }
-        path = new_path;
+        .into_owned();
+    if path.contains("//") {
+        let mut previous_slash = false;
+        path.retain(|ch| {
+            let slash = ch == '/';
+            let keep = !slash || !previous_slash;
+            previous_slash = slash;
+            keep
+        });
     }
     Ok(path)
 }
@@ -841,6 +839,49 @@ mod tests {
         assert!(args.log_path.is_none());
         assert_eq!(args.clickhouse_database, "mirrors");
         assert_eq!(args.clickhouse_table, "access_log");
+    }
+
+    #[test]
+    fn normalized_paths_preserve_decoding_and_slash_semantics() {
+        for (uri, expected) in [
+            ("/a%2F%2F/b", "/a/b"),
+            ("/a%252Fb", "/a%2Fb"),
+            ("/a/%2e%2e/b?query=//x#//fragment", "/b"),
+            ("/a%3Fb%23c", "/a?b#c"),
+            ("/文件////目录/", "/文件/目录/"),
+            ("https://example.com///a//b?q=x#fragment", "/a/b"),
+            ("////", "/"),
+            ("/a%00b", "/a\0b"),
+        ] {
+            assert_eq!(log_uri_normalize(uri).unwrap(), expected, "{uri}");
+        }
+        assert!(log_uri_normalize("/%FF").is_err());
+        assert!(log_uri_normalize("relative/path").is_err());
+    }
+
+    #[test]
+    fn structured_client_keys_preserve_previous_identity() {
+        // IpNetwork's old string representation retained host bits. Keep that
+        // behavior here; changing which clients share votes is a separate change.
+        let addresses: Vec<IpAddr> = [
+            "192.0.2.1",
+            "192.0.2.2",
+            "192.0.3.1",
+            "::ffff:192.0.2.1",
+            "2001:db8::1",
+            "2001:0db8:0:0:0:0:0:1",
+            "2001:db8::2",
+        ]
+        .iter()
+        .map(|ip| ip.parse().unwrap())
+        .collect();
+        for a in &addresses {
+            for b in &addresses {
+                let a = get_ip_prefix(*a);
+                let b = get_ip_prefix(*b);
+                assert_eq!(a == b, a.to_string() == b.to_string());
+            }
+        }
     }
 
     #[test]

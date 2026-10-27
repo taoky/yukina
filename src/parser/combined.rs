@@ -36,15 +36,16 @@ fn clf_date_parse(s: &str) -> Result<DateTime<FixedOffset>> {
     let timezone_sign = if &s[21..22] == "-" { -1 } else { 1 };
     let timezone_hour: i32 = s[22..24].parse().unwrap();
     let timezone_offset = timezone_sign * timezone_hour * 3600;
-    let timezone = FixedOffset::east_opt(timezone_offset).ok_or(anyhow!("invalid timezone"))?;
+    let timezone =
+        FixedOffset::east_opt(timezone_offset).ok_or_else(|| anyhow!("invalid timezone"))?;
 
     let datetime = NaiveDate::from_ymd_opt(year, month, day)
         .and_then(|date| date.and_hms_opt(hour, minute, second))
         .map(|date| date.and_local_timezone(timezone))
-        .ok_or(anyhow!("invalid datetime"))?;
+        .ok_or_else(|| anyhow!("invalid datetime"))?;
     let datetime = datetime
         .single()
-        .ok_or(anyhow!("ambiguous or invalid datetime"))?;
+        .ok_or_else(|| anyhow!("ambiguous or invalid datetime"))?;
     Ok(datetime)
 }
 
@@ -52,26 +53,23 @@ fn clf_date_parse(s: &str) -> Result<DateTime<FixedOffset>> {
 pub struct CombinedParser {}
 
 impl LogParser for CombinedParser {
-    fn parse(&self, line: &str) -> Result<LogItem> {
+    fn parse<'a>(&self, line: &'a str) -> Result<LogItem<'a>> {
         let mut parts = line.splitn(2, " - ");
-        let client = parts
-            .next()
-            .ok_or(anyhow!("No client IP found"))?
-            .to_string();
+        let client = parts.next().ok_or_else(|| anyhow!("No client IP found"))?;
         // tracing::debug!("client: {:?}", client);
 
         let rest = parts
             .next()
-            .ok_or(anyhow!("Unexpected log format after client IP"))?;
+            .ok_or_else(|| anyhow!("Unexpected log format after client IP"))?;
 
         // Extracting the time
         let time_start = rest
             .find('[')
-            .ok_or(anyhow!("No opening bracket for time found"))?
+            .ok_or_else(|| anyhow!("No opening bracket for time found"))?
             + 1;
         let time_end = rest
             .find(']')
-            .ok_or(anyhow!("No closing bracket for time found"))?;
+            .ok_or_else(|| anyhow!("No closing bracket for time found"))?;
         let time_str = &rest[time_start..time_end];
         // tracing::debug!("time_str: {:?}", time_str);
         let time = clf_date_parse(time_str)?;
@@ -79,24 +77,25 @@ impl LogParser for CombinedParser {
         // Extract the URL from the request
         let request_start = rest
             .find('"')
-            .ok_or(anyhow!("No opening quote for request found"))?
+            .ok_or_else(|| anyhow!("No opening quote for request found"))?
             + 1;
         let request_end = rest[request_start..]
             .find('"')
-            .ok_or(anyhow!("No closing quote for request found"))?
+            .ok_or_else(|| anyhow!("No closing quote for request found"))?
             + request_start;
         let request_str = &rest[request_start..request_end];
         let url = request_str
             .split_whitespace()
             .nth(1)
-            .ok_or(anyhow!("No URL found in request"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("No URL found in request"))?;
         // tracing::debug!("url: {:?}", url);
 
         // tracing::debug!("rest: {:?}", &rest[request_end + 2..]);
         // Extracting the size after the second '"'
         let rest = &rest[request_end + 2..];
-        let status_end = rest.find(' ').ok_or(anyhow!("No space after URL found"))?;
+        let status_end = rest
+            .find(' ')
+            .ok_or_else(|| anyhow!("No space after URL found"))?;
         let status_str = &rest[..status_end];
         let status: u16 = status_str.parse()?;
         // tracing::debug!("status: {:?}", status);
@@ -104,7 +103,7 @@ impl LogParser for CombinedParser {
         let size_start = status_end + 1;
         let size_end = rest[size_start..]
             .find(' ')
-            .ok_or(anyhow!("No space after status found"))?
+            .ok_or_else(|| anyhow!("No space after status found"))?
             + size_start;
         let size_str = &rest[size_start..size_end];
         let size: u64 = size_str.parse()?;
@@ -112,19 +111,26 @@ impl LogParser for CombinedParser {
 
         // find third " as user agent start
         let rest = &rest[size_end + 1..];
-        let matches = rest.match_indices('"').collect::<Vec<_>>();
-        let user_agent_start = matches[2].0 + 1;
-        let user_agent_end = matches[3].0;
+        let mut quotes = rest.match_indices('"');
+        let user_agent_start = quotes
+            .nth(2)
+            .ok_or_else(|| anyhow!("No opening quote for user agent found"))?
+            .0
+            + 1;
+        let user_agent_end = quotes
+            .next()
+            .ok_or_else(|| anyhow!("No closing quote for user agent found"))?
+            .0;
         let user_agent = &rest[user_agent_start..user_agent_end];
         // tracing::debug!("user_agent: {:?}", user_agent);
 
         Ok(LogItem {
             client: client.parse()?,
             time,
-            url,
+            url: url.into(),
             size,
             status,
-            user_agent: user_agent.to_string(),
+            user_agent: user_agent.into(),
             proxied: false, // combined log format does not have proxied info
         })
     }
@@ -154,5 +160,17 @@ mod tests {
         assert_eq!(item.status, 200);
         assert_eq!(item.time.to_rfc3339(), "2023-03-12T00:15:32+08:00");
         assert_eq!(item.user_agent, "");
+    }
+
+    #[test]
+    fn combined_borrows_fields_and_reports_missing_user_agent() {
+        let parser = CombinedParser::default();
+        let log = r#"2001:db8::1 - - [12/Mar/2023:00:15:32 +0800] "GET /some%20path?q=1 HTTP/1.1" 206 3009 "https://example.com/" "Nix/2.0 curl/8.0" extra"#;
+        let item = parser.parse(log).unwrap();
+        assert!(matches!(item.url, std::borrow::Cow::Borrowed(_)));
+        assert!(matches!(item.user_agent, std::borrow::Cow::Borrowed(_)));
+        assert_eq!(item.url, "/some%20path?q=1");
+        assert_eq!(item.user_agent, "Nix/2.0 curl/8.0");
+        assert!(parser.parse(log.split(" \"Nix").next().unwrap()).is_err());
     }
 }

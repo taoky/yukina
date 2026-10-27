@@ -11,7 +11,7 @@ use std::{
 use yukina::{db_get, db_remove, db_set, LocalSizeDBItem, RemoteSizeDBItem};
 
 use crate::{
-    construct_url, deduce_log_file_type, download_file, get_hit_rate, get_ip_prefix_string,
+    construct_url, deduce_log_file_type, download_file, get_hit_rate, get_ip_prefix,
     get_progress_bar, insert_remotedb, log_uri_normalize, matches_filter, normalize_vote,
     parser::{get_log_parser, LogItem},
     probe_file, remote_file_size, remove_file, Cli, FileStats, LogFileType, LogSource,
@@ -19,21 +19,45 @@ use crate::{
 };
 
 fn is_bad_bot(ua: &str) -> bool {
-    let ua = ua.to_ascii_lowercase();
-    if ua.contains("curl/") && ua.contains("nix/") {
-        return false; // nix client
+    fn contains(ua: &str, needle: &[u8]) -> bool {
+        ua.as_bytes()
+            .windows(needle.len())
+            .any(|part| part.eq_ignore_ascii_case(needle))
     }
-    ua.starts_with("curl/")
-        || ua.starts_with("wget/")
-        || ua.starts_with("python-requests/")
-        || ua.starts_with("bandersnatch")
-        || ua.starts_with("shadowmire") // don't include sync clients
+    fn starts_with(ua: &str, prefix: &[u8]) -> bool {
+        ua.as_bytes()
+            .get(..prefix.len())
+            .is_some_and(|part| part.eq_ignore_ascii_case(prefix))
+    }
+    let sync_client = starts_with(ua, b"curl/")
+        || starts_with(ua, b"wget/")
+        || starts_with(ua, b"python-requests/")
+        || starts_with(ua, b"bandersnatch")
+        || starts_with(ua, b"shadowmire");
+    // Only potential sync clients need the more expensive Nix exception check.
+    sync_client && !(contains(ua, b"curl/") && contains(ua, b"nix/"))
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct IpPrefixUrl {
-    ip_prefix: String,
+    ip_prefix: ipnetwork::IpNetwork,
     url: String,
+}
+
+struct LogContext {
+    now: DateTime<Utc>,
+    duration: TimeDelta,
+    repo_prefix: String,
+}
+
+impl LogContext {
+    fn new(args: &Cli, now: DateTime<Utc>) -> Self {
+        Self {
+            now,
+            duration: TimeDelta::from_std(*args.log_duration).unwrap(),
+            repo_prefix: format!("/{}", args.name),
+        }
+    }
 }
 
 fn process_logitem(
@@ -41,7 +65,7 @@ fn process_logitem(
     item: LogItem,
     vote: &mut HashMap<String, VoteValue>,
     access_record: &mut HashMap<IpPrefixUrl, DateTime<Utc>>,
-    now_utc: DateTime<Utc>,
+    context: &LogContext,
     hit: &mut usize,
     miss: &mut usize,
 ) -> bool {
@@ -54,8 +78,8 @@ fn process_logitem(
             return false;
         }
     };
-    let duration = now_utc.signed_duration_since(item.time);
-    if duration > TimeDelta::from_std(*args.log_duration).unwrap() {
+    let duration = context.now.signed_duration_since(item.time);
+    if duration > context.duration {
         return true;
     }
     if !args.include_browser_ua && item.user_agent.starts_with("Mozilla") {
@@ -64,10 +88,10 @@ fn process_logitem(
     if !args.include_bad_bot_ua && is_bad_bot(&item.user_agent) {
         return false;
     }
-    let client_prefix = get_ip_prefix_string(item.client);
+    let client_prefix = get_ip_prefix(item.client);
     let ip_prefix_url = IpPrefixUrl {
         ip_prefix: client_prefix,
-        url: path.clone(),
+        url: path,
     };
     if let Some(last_time) = access_record.get(&ip_prefix_url) {
         let delta = item.time.signed_duration_since(*last_time).abs();
@@ -76,12 +100,12 @@ fn process_logitem(
         }
     }
     // strip prefix of the path, convert /reponame/some/path/xxx => /some/path/xxx
-    let mut path = match path.strip_prefix(&format!("/{}", args.name)) {
+    let mut path = match ip_prefix_url.url.strip_prefix(&context.repo_prefix) {
         Some(p) => p,
         None => {
             tracing::warn!(
                 "unexpected strip prefix (repo name) failed for path {}",
-                path
+                ip_prefix_url.url
             );
             return false;
         }
@@ -110,7 +134,10 @@ fn process_logitem(
     if !matches_filter(path, &args.filter) {
         return false;
     }
-    let vote = vote.entry(path.to_owned()).or_default();
+    let vote = match vote.get_mut(path) {
+        Some(value) => value,
+        None => vote.entry(path.to_owned()).or_default(),
+    };
     vote.count += 1;
     if (item.status == 200 || item.status == 206 || item.status == 304) && !item.proxied {
         vote.success_count += 1;
@@ -187,6 +214,7 @@ fn stage1_file(args: &Cli) -> UserVote {
     tracing::debug!("Entries: {:?}", entries);
 
     let now_utc = chrono::Utc::now();
+    let context = LogContext::new(args, now_utc);
     let combined_parser = get_log_parser(args.log_format);
 
     let mut vote: HashMap<String, VoteValue> = HashMap::new();
@@ -214,7 +242,7 @@ fn stage1_file(args: &Cli) -> UserVote {
         let filetype = deduce_log_file_type(filename);
 
         let mut child_process = None;
-        let bufreader: BufReader<Box<dyn std::io::Read>> = match filetype {
+        let mut bufreader: BufReader<Box<dyn std::io::Read>> = match filetype {
             LogFileType::Plain => {
                 let file = std::fs::File::open(entry.path()).expect("open file failed");
                 std::io::BufReader::new(Box::new(file))
@@ -242,9 +270,12 @@ fn stage1_file(args: &Cli) -> UserVote {
             }
         };
 
-        for (lno, line) in bufreader.lines().enumerate() {
-            let line = match line {
-                Ok(line) => line,
+        let mut line = String::new();
+        for lno in 0usize.. {
+            line.clear();
+            match bufreader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
                     tracing::warn!(
                         "Skipping line {} with invalid data in {}: {}",
@@ -255,14 +286,21 @@ fn stage1_file(args: &Cli) -> UserVote {
                     continue;
                 }
                 Err(e) => panic!("read line failed: {e}"),
-            };
+            }
+            // Match BufRead::lines(): strip LF and an optional preceding CR.
+            if line.ends_with('\n') {
+                line.pop();
+                if line.ends_with('\r') {
+                    line.pop();
+                }
+            }
             let item = combined_parser.parse(&line).expect("parse line failed");
             stop_iterate_flag = process_logitem(
                 args,
                 item,
                 &mut vote,
                 &mut access_record,
-                now_utc,
+                &context,
                 &mut hit,
                 &mut miss,
             );
@@ -292,7 +330,7 @@ struct ClickhouseLogRow {
     proxied: String,
 }
 
-impl TryFrom<ClickhouseLogRow> for LogItem {
+impl TryFrom<ClickhouseLogRow> for LogItem<'static> {
     type Error = anyhow::Error;
 
     fn try_from(row: ClickhouseLogRow) -> Result<Self> {
@@ -303,10 +341,10 @@ impl TryFrom<ClickhouseLogRow> for LogItem {
         Ok(LogItem {
             client,
             time: row.event_time.into(),
-            url: row.url,
+            url: row.url.into(),
             size: row.size,
             status: row.status,
-            user_agent: row.user_agent,
+            user_agent: row.user_agent.into(),
             proxied: row.proxied != "0",
         })
     }
@@ -334,6 +372,7 @@ async fn stage1_clickhouse_with_client(
     now_utc: DateTime<Utc>,
 ) -> Result<UserVote> {
     let cutoff = now_utc - TimeDelta::from_std(*args.log_duration)?;
+    let context = LogContext::new(args, now_utc);
     let mut range_end = now_utc;
     let mut vote = HashMap::new();
     let mut hit = 0;
@@ -374,7 +413,7 @@ async fn stage1_clickhouse_with_client(
                 item,
                 &mut vote,
                 &mut access_record,
-                now_utc,
+                &context,
                 &mut hit,
                 &mut miss,
             );
@@ -927,6 +966,103 @@ pub async fn stage4(
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn bot_filter_preserves_case_and_nix_exception() {
+        for ua in [
+            "",
+            "curl/8",
+            "CuRL/8 NIX/2",
+            "wget/1",
+            "WgEt/1",
+            "PYTHON-Requests/2",
+            "Bandersnatch",
+            "SHADOWMIRE/1",
+            "ordinary client",
+            "Nix/2 curl/8",
+            "wget/1 curl/8 nix/2",
+            "curl/8 nix",
+            "文件/curl/8",
+            "python-requests/2 文件 NIX/2 CURL/8",
+            "curl/8 NİX/2",
+        ] {
+            let lower = ua.to_ascii_lowercase();
+            let old_result = !(lower.contains("curl/") && lower.contains("nix/"))
+                && (lower.starts_with("curl/")
+                    || lower.starts_with("wget/")
+                    || lower.starts_with("python-requests/")
+                    || lower.starts_with("bandersnatch")
+                    || lower.starts_with("shadowmire"));
+            assert_eq!(is_bad_bot(ua), old_result, "{ua}");
+        }
+    }
+
+    #[test]
+    fn reused_line_buffer_preserves_votes_for_both_formats() {
+        use crate::parser::LogFormat;
+        struct TempDir(std::path::PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!(
+            "yukina-log-buffer-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        )));
+        std::fs::create_dir(&dir.0).unwrap();
+        let base = Utc::now() - TimeDelta::hours(1);
+        let filter = regex::Regex::new(r"\.blob$").unwrap();
+        for format in [LogFormat::Combined, LogFormat::MirrorJson] {
+            let mut args = clickhouse_args("7d");
+            args.log_path = Some(dir.0.clone());
+            args.log_format = format;
+            args.strip_prefix = Some("/store".into());
+            args.filter = vec![filter.clone()];
+            let mut data = Vec::new();
+            for (offset, path, size, ua) in [
+                (-8 * 86400, "old.blob", 1, "client"),
+                (0, "a.blob", 10, "client"),
+                (60, "a.blob", 99, "client"),
+                (60, "browser.blob", 99, "Mozilla/5"),
+                (60, "bot.blob", 99, "PyThOn-ReQuEsTs/2"),
+                (60, "filtered", 99, "client"),
+                (60, "nix.blob", 20, "CuRL/8 NiX/2"),
+                (300, "a.blob", 40, "client"),
+            ] {
+                let time = base + TimeDelta::seconds(offset);
+                let url = format!("/test/store/{path}");
+                let line = match format {
+                    LogFormat::Combined => format!(
+                        "192.0.2.1 - - [{}] \"GET {url} HTTP/1.1\" 200 {size} \"-\" \"{ua}\"",
+                        time.format("%d/%b/%Y:%H:%M:%S +0000")
+                    ),
+                    LogFormat::MirrorJson => serde_json::json!({
+                        "timestamp": time.timestamp(), "clientip": "192.0.2.1",
+                        "url": url, "status": 200, "size": size,
+                        "user_agent": ua, "proxied": "0",
+                    })
+                    .to_string(),
+                };
+                data.extend_from_slice(line.as_bytes());
+                if offset != 300 {
+                    data.extend_from_slice(b"\r\n");
+                }
+                if offset == 0 {
+                    // The next successful read must not retain any invalid bytes.
+                    data.extend_from_slice(b"invalid UTF-8: \xff\n");
+                }
+            }
+            std::fs::write(dir.0.join("test.log"), data).unwrap();
+            let vote: HashMap<_, _> = stage1_file(&args).into_iter().collect();
+            assert_eq!(vote.len(), 2, "{format:?}");
+            assert_eq!(vote["a.blob"].count, 2);
+            assert_eq!(vote["a.blob"].success_count, 2);
+            assert_eq!(vote["a.blob"].resp_size, 40);
+            assert_eq!(vote["nix.blob"].count, 1);
+        }
+    }
 
     fn clickhouse_args(log_duration: &str) -> Cli {
         Cli::try_parse_from([

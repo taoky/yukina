@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::{borrow::Cow, net::IpAddr};
 
 use anyhow::Result;
 use chrono::{DateTime, FixedOffset};
@@ -14,18 +14,18 @@ pub enum LogFormat {
 }
 
 #[derive(Debug)]
-pub struct LogItem {
+pub struct LogItem<'a> {
     pub client: IpAddr,
     pub time: DateTime<FixedOffset>,
-    pub url: String,
+    pub url: Cow<'a, str>,
     pub size: u64,
     pub status: u16,
-    pub user_agent: String,
+    pub user_agent: Cow<'a, str>,
     pub proxied: bool,
 }
 
 pub trait LogParser {
-    fn parse(&self, line: &str) -> Result<LogItem>;
+    fn parse<'a>(&self, line: &'a str) -> Result<LogItem<'a>>;
 }
 
 pub fn get_log_parser(format: LogFormat) -> Box<dyn LogParser> {

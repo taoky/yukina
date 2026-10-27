@@ -1,26 +1,29 @@
-use std::net::IpAddr;
+use std::{borrow::Cow, net::IpAddr};
 
 use serde::Deserialize;
 
 use super::{LogItem, LogParser};
 
 #[derive(Deserialize)]
-struct RawLogItem {
-    timestamp: f64,     // $msec
-    clientip: String,   // $remote_addr
-    url: String,        // $request_uri
-    size: u64,          // $body_bytes_sent
-    status: u16,        // $status
-    user_agent: String, // $http_user_agent
-    #[serde(default)]
-    proxied: String, // custom field to indicate if the request was proxied
+struct RawLogItem<'a> {
+    timestamp: f64, // $msec
+    #[serde(borrow)]
+    clientip: Cow<'a, str>, // $remote_addr
+    #[serde(borrow)]
+    url: Cow<'a, str>, // $request_uri
+    size: u64,      // $body_bytes_sent
+    status: u16,    // $status
+    #[serde(borrow)]
+    user_agent: Cow<'a, str>, // $http_user_agent
+    #[serde(default, borrow)]
+    proxied: Cow<'a, str>, // custom field to indicate if the request was proxied
 }
 
 #[derive(Default)]
 pub struct MirrorJsonParser {}
 
 impl LogParser for MirrorJsonParser {
-    fn parse(&self, line: &str) -> anyhow::Result<super::LogItem> {
+    fn parse<'a>(&self, line: &'a str) -> anyhow::Result<LogItem<'a>> {
         let raw: RawLogItem = serde_json::from_str(line)?;
         let client: IpAddr = raw.clientip.parse()?;
         let secs = raw.timestamp.trunc() as i64;
@@ -66,5 +69,28 @@ mod tests {
             "2025-10-23T19:19:36.709000110+00:00"
         );
         assert_eq!(item.proxied, false);
+    }
+
+    #[test]
+    fn json_borrows_plain_strings_and_decodes_escaped_strings() {
+        let parser = MirrorJsonParser::default();
+        let plain = r#"{"timestamp":1761247176,"clientip":"192.0.2.1","url":"/test/file","size":42,"status":200,"user_agent":"client","proxied":"0"}"#;
+        let item = parser.parse(plain).unwrap();
+        assert!(matches!(item.url, Cow::Borrowed(_)));
+        assert!(matches!(item.user_agent, Cow::Borrowed(_)));
+        assert!(!item.proxied);
+
+        let escaped = r#"{"timestamp":1761247176,"clientip":"192.0.2.\u0031","url":"\/test\/\u6587\u4ef6","size":42,"status":200,"user_agent":"a\"b\\c","proxied":"\u0030"}"#;
+        let item = parser.parse(escaped).unwrap();
+        assert_eq!(item.client, "192.0.2.1".parse::<IpAddr>().unwrap());
+        assert_eq!(item.url, "/test/文件");
+        assert_eq!(item.user_agent, "a\"b\\c");
+        assert!(!item.proxied);
+        assert!(matches!(item.url, Cow::Owned(_)));
+        assert!(matches!(item.user_agent, Cow::Owned(_)));
+
+        // Preserve the existing interpretation of a missing proxied field.
+        let missing = plain.replace(",\"proxied\":\"0\"", "");
+        assert!(parser.parse(&missing).unwrap().proxied);
     }
 }
