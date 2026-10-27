@@ -421,17 +421,13 @@ pub fn stage2(args: &Cli, local_sizedb: Option<&crate::db::Db>) -> FileStats {
         if !entry.file_type().is_file() {
             continue;
         }
-        let filesize = {
-            let mut res = None;
-            if let Ok(size) = db_get::<LocalSizeDBItem>(local_sizedb, path) {
-                res = Some(size.size);
-            } else {
-                res = Some(
-                    res.unwrap_or_else(|| entry.metadata().expect("get metadata failed").len()),
-                );
-                let _ = db_set::<LocalSizeDBItem>(local_sizedb, path, res.unwrap().into());
+        let filesize = match db_get::<LocalSizeDBItem>(local_sizedb, path) {
+            Ok(size) => size.size,
+            Err(_) => {
+                let size = entry.metadata().expect("get metadata failed").len();
+                let _ = db_set::<LocalSizeDBItem>(local_sizedb, path, size.into());
+                size
             }
-            res.unwrap()
         };
         res.push((path.to_string(), filesize));
     }
@@ -878,10 +874,15 @@ pub async fn stage4(
         };
     }
 
-    while let Some(item) = to_download_queue.pop() {
+    'candidates: while let Some(item) = to_download_queue.pop() {
         // does size fit?
         let remote_score = item.stats.score;
         let remote_size = item.stats.size;
+        // Reject impossible candidates before evicting any local files.
+        if remote_size > max {
+            tracing::info!("Skipped {:?} as it's too large", item);
+            continue;
+        }
         if sum.checked_add(remote_size).unwrap() <= max {
             download!(item, remote_size);
         } else if sum <= max {
@@ -891,9 +892,8 @@ pub async fn stage4(
                 let local_item = to_remove_queue.pop();
                 let local_item = match local_item {
                     None => {
-                        // file too large? skip this one
-                        tracing::info!("Skipped {:?} as it's too large", item);
-                        continue;
+                        tracing::info!("Skipped {:?} as there is no more space to reclaim", item);
+                        continue 'candidates;
                     }
                     Some(l) => l,
                 }

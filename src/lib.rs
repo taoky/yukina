@@ -29,7 +29,7 @@ impl From<usize> for LocalSizeDBItem {
 
 pub fn db_get<T>(db: Option<&db::Db>, key: &str) -> anyhow::Result<T>
 where
-    T: serde::de::DeserializeOwned + Default,
+    T: serde::de::DeserializeOwned,
 {
     if let Some(db) = db {
         let value = db.get(key)?;
@@ -38,7 +38,7 @@ where
             None => Err(anyhow::anyhow!("Key not found")),
         }
     } else {
-        Ok(T::default())
+        Err(anyhow::anyhow!("Size database is disabled"))
     }
 }
 
